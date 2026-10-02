@@ -38,8 +38,9 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:"Atkinson Hyp
 .app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 370px}
 .stage{position:relative;min-height:0;min-width:0;background:var(--stage);overflow:hidden}
 .stage canvas{display:block;width:100%;height:100%;touch-action:none}
+body.dragging .stage::after{content:"Datei hier ablegen";position:absolute;inset:10px;border:2px dashed var(--accent);border-radius:6px;display:grid;place-items:center;font:700 18px/1 "Atkinson Hyperlegible",system-ui,sans-serif;color:var(--ink);background:rgba(240,201,58,.12);pointer-events:none}
 
-.tower{position:absolute;left:12px;top:12px;max-height:calc(100% - 76px);display:flex;flex-direction:column-reverse;gap:3px;overflow-y:auto;padding:2px}
+.tower{position:absolute;left:12px;top:12px;max-height:calc(100% - 76px);display:flex;flex-direction:column-reverse;gap:3px;overflow-y:auto;overflow-x:hidden;padding:2px}
 .tower button{flex:0 0 auto;display:grid;grid-template-columns:22px 34px;align-items:center;gap:6px;height:24px;padding:0 6px;border:1px solid var(--line);background:var(--btn);color:var(--ink);border-radius:3px;font:700 12px/1 "Atkinson Hyperlegible",system-ui,sans-serif;cursor:pointer;text-align:right}
 .tower button.above{color:var(--muted);opacity:.7}
 .tower .bar{height:6px;background:var(--line);border-radius:1px;overflow:hidden}
@@ -76,6 +77,7 @@ input[type=range]{accent-color:var(--ink);width:100%;margin:0}
 .map-wrap{border:1px solid var(--line);background:var(--panel);padding:8px;overflow-x:auto}
 .map-wrap canvas{display:block}
 .note{font-size:13px;color:var(--muted);margin:8px 0 0}
+.note code{font-size:12px;overflow-wrap:anywhere}
 
 .mats{width:100%;border-collapse:collapse;font-size:14px}
 .mats th{font-weight:400;color:var(--muted);text-align:right;padding:0 0 6px;font-size:13px}
@@ -92,15 +94,20 @@ input[type=range]{accent-color:var(--ink);width:100%;margin:0}
 .field label{display:flex;justify-content:space-between;gap:10px;font-size:14px;margin-bottom:6px}
 .field output{color:var(--muted);font-variant-numeric:tabular-nums}
 .check{display:flex;gap:10px;align-items:center;font-size:14px;margin-top:10px;cursor:pointer}
+.check.tight{margin:0 0 10px}
 .check input{accent-color:var(--ink);width:18px;height:18px;margin:0}
 
 details summary{cursor:pointer;font-family:"Bricolage Grotesque",Georgia,serif;font-weight:500;font-size:17px}
 details p{font-size:13.5px;color:var(--muted);margin:10px 0}
 details code{font-size:12.5px}
+details.mini{margin-top:12px}
+details.mini summary{font:700 14px/1.4 "Atkinson Hyperlegible",system-ui,sans-serif}
 textarea{width:100%;min-height:240px;resize:vertical;font:12px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--ink);background:var(--btn);border:1px solid var(--line);border-radius:4px;padding:10px}
+#missing{min-height:110px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .file-btn{position:relative;overflow:hidden}
 .file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.file-btn:focus-within{outline:2px solid var(--focus);outline-offset:2px}
 .status{font-size:13px;margin-top:8px;min-height:1.2em;color:var(--muted)}
 .status.error{color:var(--error)}
 
@@ -128,6 +135,10 @@ textarea{width:100%;min-height:240px;resize:vertical;font:12px/1.4 ui-monospace,
   <aside class="panel">
     <h1>Bauanleitung</h1>
     <p class="sub" id="buildName"></p>
+    <div class="row">
+      <span class="btn primary file-btn">Schematic öffnen<input type="file" id="schemFile" accept=".schem,.schematic" aria-label="Schematic-Datei öffnen"></span>
+    </div>
+    <div class="status" id="schemStatus" role="status">WorldEdit-Datei (.schem) wählen oder auf die Seite ziehen.</div>
 
     <div class="indicator" aria-live="polite">
       <span class="ind-label">Ebene</span>
@@ -144,11 +155,12 @@ textarea{width:100%;min-height:240px;resize:vertical;font:12px/1.4 ui-monospace,
     <section class="block">
       <h2>Draufsicht dieser Ebene</h2>
       <div class="map-wrap"><canvas id="map"></canvas></div>
-      <p class="note">Blass dargestellt: die Ebene darunter. Der untere Rand ist die Vorderseite.</p>
+      <p class="note">Blass dargestellt: die Ebene darunter. Oben ist Norden.</p>
     </section>
 
     <section class="block">
       <h2>Material</h2>
+      <label class="check tight"><input type="checkbox" id="optOnly"> Nur Blöcke dieser Ebene</label>
       <table class="mats">
         <thead><tr><th>Block</th><th>Diese Ebene</th><th>Gesamt</th></tr></thead>
         <tbody id="mats"></tbody>
@@ -175,9 +187,26 @@ textarea{width:100%;min-height:240px;resize:vertical;font:12px/1.4 ui-monospace,
     </section>
 
     <section class="block">
+      <h2>Texturen</h2>
+      <p class="note" id="texInfo"></p>
+      <div class="row">
+        <span class="btn file-btn">Ordner wählen<input type="file" id="texDir" webkitdirectory multiple aria-label="Ordner mit Texturen wählen"></span>
+        <span class="btn file-btn">.jar oder .zip<input type="file" id="texZip" accept=".jar,.zip" aria-label="Minecraft-.jar oder Ressourcenpaket wählen"></span>
+        <button class="btn" id="texClear" type="button">Zurücksetzen</button>
+      </div>
+      <div class="status" id="texStatus" role="status"></div>
+      <details class="mini" id="missingWrap" hidden>
+        <summary id="missingTitle">Fehlende Texturdateien</summary>
+        <p>Diese PNG-Dateien wurden nicht gefunden. Bei „oder“ reicht eine davon. Blöcke mit verschiedenen Seiten nutzen zusätzlich <code>&lt;name&gt;_top.png</code>, <code>_side.png</code> und <code>_bottom.png</code>, falls vorhanden.</p>
+        <textarea id="missing" readonly spellcheck="false" aria-label="Fehlende Texturdateien"></textarea>
+      </details>
+      <p class="note">Bis echte Texturen da sind, zeigt jeder Block einen Platzhalter. Die Originale liegen in <code>%APPDATA%\.minecraft\versions\&lt;Version&gt;\&lt;Version&gt;.jar</code> unter <code>assets/minecraft/textures/block</code>. Wähle die .jar direkt oder einen Ordner mit den PNG-Dateien; sie werden in diesem Browser gespeichert.</p>
+    </section>
+
+    <section class="block">
       <details>
         <summary>Eigenen Bauplan laden</summary>
-        <p>Jede Ebene ist eine Liste von Zeilen, die erste Ebene ist die unterste. Jedes Zeichen ist ein Block, <code>.</code> ist Luft. In <code>palette</code> ordnest du Zeichen einem Blocktyp zu: <code>stone</code>, <code>planks</code>, <code>log</code>, <code>glass</code>, <code>brick</code>, <code>leaves</code>, eine Farbe wie <code>"#c2a36b"</code> oder <code>{"color":"#c2a36b","name":"Sandstein"}</code>.</p>
+        <p>Jede Ebene ist eine Liste von Zeilen, die erste Ebene ist die unterste. Jedes Zeichen ist ein Block, <code>.</code> ist Luft. In <code>palette</code> ordnest du Zeichen einem Block zu: einer Minecraft-ID wie <code>"minecraft:oak_stairs[facing=east]"</code>, einem Kurznamen (<code>stone</code>, <code>planks</code>, <code>log</code>, <code>glass</code>, <code>brick</code>, <code>leaves</code>), einer Farbe wie <code>"#c2a36b"</code> oder <code>{"color":"#c2a36b","name":"Sandstein"}</code>.</p>
         <textarea id="json" spellcheck="false" aria-label="Bauplan als JSON"></textarea>
         <div class="row">
           <button class="btn primary" id="load" type="button">Bauplan laden</button>
@@ -197,83 +226,520 @@ textarea{width:100%;min-height:240px;resize:vertical;font:12px/1.4 ui-monospace,
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-/* ---------- Block types with procedural pixel textures ---------- */
-const BASE_TYPES = {
-  stone:{name:'Bruchstein'}, planks:{name:'Holzbretter'}, log:{name:'Baumstamm'},
-  glass:{name:'Glas'}, brick:{name:'Dachziegel'}, leaves:{name:'Laub'}
+/* =====================================================================
+   Anpassbar: Texturen und Namen
+   Echte Texturen heißen wie in Minecraft (assets/minecraft/textures/block/<name>.png).
+   Fehlt eine Datei, wird ein Platzhalter gezeichnet.
+   ===================================================================== */
+
+// Wird automatisch benutzt, wenn die Seite über einen lokalen Webserver läuft
+// (z. B. „python -m http.server“ im Ordner dieser Datei).
+const TEX_DIR = 'textures/block/';
+
+// Blöcke, deren Texturdateien anders heißen als der Block. Ein Name gilt für alle
+// Seiten, sonst {top, side, bottom}. Bei einer Liste gewinnt der erste vorhandene Name.
+// Alle anderen Blöcke suchen <name>_top.png / <name>_side.png / <name>.png.
+const TEXTURES = {
+  grass_block:          {top:'grass_block_top', side:'grass_block_side', bottom:'dirt'},
+  podzol:               {top:'podzol_top', side:'podzol_side', bottom:'dirt'},
+  mycelium:             {top:'mycelium_top', side:'mycelium_side', bottom:'dirt'},
+  dirt_path:            {top:'dirt_path_top', side:'dirt_path_side', bottom:'dirt'},
+  farmland:             {top:'farmland', side:'dirt', bottom:'dirt'},
+  smooth_sandstone:     'sandstone_top',
+  smooth_red_sandstone: 'red_sandstone_top',
+  cut_sandstone:        {top:'sandstone_top', side:'cut_sandstone', bottom:'sandstone_bottom'},
+  chiseled_sandstone:   {top:'sandstone_top', side:'chiseled_sandstone', bottom:'sandstone_bottom'},
+  smooth_quartz:        'quartz_block_bottom',
+  bookshelf:            {top:'oak_planks', side:'bookshelf'},
+  water:                'water_still',
+  lava:                 'lava_still',
+  bamboo:               'bamboo_stalk',
+  iron_chain:           ['iron_chain', 'chain'],
+  decorated_pot:        ['decorated_pot', 'terracotta'],   // im Spiel eine Objekt-Textur
+  pitcher_plant_top:    ['pitcher_crop_top_stage_4', 'pitcher_plant_top'],
+  pitcher_plant_bottom: ['pitcher_crop_bottom_stage_4', 'pitcher_plant_bottom'],
+  azalea_bush:          ['potted_azalea_bush_plant', 'azalea_plant'],            // im Blumentopf
+  flowering_azalea_bush:['potted_flowering_azalea_bush_plant', 'azalea_plant']
 };
+
+// Vanilla-Texturen, die grau gespeichert sind und im Spiel je nach Biom gefärbt
+// werden. Benutzt werden die Farben des Ebenen-Bioms.
+const TINTS = {
+  grass_block_top:'#91bd59', short_grass:'#91bd59', tall_grass_top:'#91bd59', tall_grass_bottom:'#91bd59',
+  fern:'#91bd59', large_fern_top:'#91bd59', large_fern_bottom:'#91bd59', bush:'#91bd59', sugar_cane:'#91bd59',
+  oak_leaves:'#77ab2f', jungle_leaves:'#77ab2f', acacia_leaves:'#77ab2f', dark_oak_leaves:'#77ab2f', mangrove_leaves:'#77ab2f',
+  spruce_leaves:'#619961', birch_leaves:'#80a755', vine:'#77ab2f', lily_pad:'#208030',
+  water_still:'#3f76e4', water_flow:'#3f76e4'
+};
+
+// Eigene Anzeigenamen (Block-ID ohne „minecraft:“), z. B. auf Deutsch.
+// Ohne Eintrag wird der englische Name aus der ID gebildet.
+const NAMES = {
+  // cherry_planks: 'Kirschholzbretter',
+};
+
+/* ---------- Platzhalter-Texturen ---------- */
+const DYE={white:'#e9ecec',light_gray:'#8e8e86',gray:'#3e4447',black:'#1d1d21',brown:'#724728',red:'#a12722',orange:'#f07613',yellow:'#f8c527',lime:'#70b919',green:'#546d1b',cyan:'#158991',light_blue:'#3aafd9',blue:'#35399d',purple:'#792aac',magenta:'#bd44b3',pink:'#ed8dac'};
+const WOOD={oak:'#b8945f',spruce:'#7a5a34',birch:'#d7cb8d',jungle:'#b88764',acacia:'#ad5d32',dark_oak:'#4f3218',mangrove:'#773934',cherry:'#e4b4a5',pale_oak:'#e8e0da',bamboo:'#c9b75a',crimson:'#6a344b',warped:'#2b6963'};
+const DYE_RE=/^(light_blue|light_gray|white|orange|magenta|yellow|lime|pink|gray|cyan|purple|blue|brown|green|red|black)_/;
+const WOOD_RE=/(pale_oak|dark_oak|oak|spruce|birch|jungle|acacia|mangrove|cherry|bamboo|crimson|warped)/;
+const COLORS=[ // erstes passendes Muster gewinnt
+  [/water/,'#3f76e4'],[/lava/,'#e05a12'],
+  [/grass_block_top|short_grass|tall_grass|fern|^bush|moss|azalea|vine|lily_pad|kelp|seagrass|sugar_cane|^cactus(_side|_top|_bottom)?$/,'#5f9b3c'],
+  [/glow_lichen/,'#7fa894'],[/dirt_path/,'#9a7b45'],[/coarse_dirt/,'#77553b'],[/dirt|farmland|grass_block|podzol|mycelium/,'#866043'],
+  [/packed_mud/,'#8e6b53'],[/mud_brick/,'#8a6a4f'],[/^mud$/,'#3c3a3a'],
+  [/red_sand/,'#be6621'],[/sand/,'#dcd0a0'],[/quartz|calcite|bone_block/,'#ece6df'],
+  [/diorite/,'#c4c4c4'],[/andesite/,'#888888'],[/granite/,'#9a6b59'],[/deepslate/,'#505055'],[/tuff/,'#6c6d66'],[/blackstone|basalt/,'#2f2a33'],
+  [/brick/,'#966153'],[/stone|cobble/,'#7f7f7f'],[/bookshelf/,'#6b5236'],[/terracotta|flower_pot|decorated_pot/,'#985e43'],
+  [/copper|lightning_rod/,'#c06c4e'],[/iron|chain|grindstone|anvil/,'#a9a9a9'],[/gold/,'#f5d33b'],
+  [/froglight|glowstone|shroomlight|lantern|torch/,'#f3dca0'],[/snow/,'#f2fbfb'],[/ice/,'#90b5f5'],[/obsidian/,'#1b1429'],
+  [/glass/,'#cfe8ee'],[/enchanting_table/,'#3b2d4c'],
+  [/dandelion|sunflower|wildflowers/,'#f2d43d'],[/poppy|rose_bush/,'#c3271b'],[/blue_orchid|cornflower/,'#3a8fd8'],
+  [/lilac|allium/,'#c08bd0'],[/peony|cactus_flower|spore_blossom/,'#ef9fc0'],[/pitcher/,'#6b8bd0'],
+  [/azure_bluet|oxeye|lily_of_the_valley/,'#e8eef0'],[/cave_vines/,'#5f7a30'],[/dead_bush/,'#8a6a3a']
+];
+const BLACK=[0,0,0],WHITE=[255,255,255];
 function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hash(s){let h=0;for(const ch of s) h=(h*31+ch.charCodeAt(0))|0;return h;}
 function hexToRgb(h){const n=parseInt(h.slice(1),16);return[n>>16&255,n>>8&255,n&255];}
+function mix(a,b,t){return [0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*t));}
+function hsl(h,s,l){const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1));return [f(0),f(8),f(4)].map(v=>Math.round(v*255));}
 function vary(rgb,amt,r){const f=1+(r()*2-1)*amt;return rgb.map(v=>Math.max(0,Math.min(255,Math.round(v*f))));}
-function paint(fn,seed){
-  const cv=document.createElement('canvas');cv.width=cv.height=16;
-  const ctx=cv.getContext('2d');const img=ctx.createImageData(16,16);const r=rng(seed);
-  for(let y=0;y<16;y++)for(let x=0;x<16;x++){
-    const c=fn(x,y,r);const i=(y*16+x)*4;
-    img.data[i]=c[0];img.data[i+1]=c[1];img.data[i+2]=c[2];img.data[i+3]=c.length>3?c[3]:255;
-  }
-  ctx.putImageData(img,0,0);return cv;
-}
-const PAINTERS = {
-  stone:(x,y,r)=>{
-    const off=Math.floor(y/5)%2?2:0;
-    if(y%5===4||(x+off)%6===5) return vary([88,91,94],.08,r);
-    const pal=[[122,125,128],[140,143,145],[156,158,160],[108,111,114]];
-    return vary(pal[Math.floor(r()*4)],.04,r);
-  },
-  planks:(x,y,r)=>{
-    const band=Math.floor(y/4);
-    if(y%4===3) return vary([110,78,46],.06,r);
-    if(x===[3,11,7,14][band]) return vary([120,85,51],.05,r);
-    return vary([[168,124,78],[160,117,72],[172,128,82],[156,113,70]][band],.05,r);
-  },
-  logSide:(x,y,r)=>{
-    const dark=x%4===0||(x*7+y*3)%11===0;
-    return vary(dark?[74,54,34]:[98,73,47],.08,r);
-  },
-  logTop:(x,y,r)=>{
-    const d=Math.hypot(x-7.5,y-7.5);
-    if(d>6.6) return vary([90,67,42],.06,r);
-    return vary(Math.floor(d*.9)%2?[176,134,86]:[150,110,68],.04,r);
-  },
-  glass:(x)=>[0,0,0,0], // replaced below
-  brick:(x,y,r)=>{
-    const row=Math.floor(y/4);
-    if(y%4===3) return vary([92,40,32],.06,r);
-    if((x+(row%2?4:0))%8===7) return vary([92,40,32],.06,r);
-    return vary(row%2?[168,70,54]:[150,60,46],.06,r);
-  },
-  leaves:(x,y,r)=>{
-    if(r()<.14) return [0,0,0,0];
-    const pal=[[58,112,44],[74,134,52],[44,92,34],[86,146,60]];
-    return vary(pal[Math.floor(r()*4)],.05,r);
-  }
-};
-PAINTERS.glass=(x,y)=>{
-  if(x===0||y===0||x===15||y===15) return [214,236,240,235];
-  if((x===y+3&&x>4&&x<10)||(x===y+5&&x>6&&x<10)) return [255,255,255,200];
-  return [190,222,232,45];
-};
 
-const typeCache=new Map();
+function colorOf(n){
+  if(n[0]==='#') return hexToRgb(n);
+  let m=n.match(DYE_RE);
+  if(m&&!/^red_(sand|nether)/.test(n)){const c=hexToRgb(DYE[m[1]]);return /terracotta/.test(n)&&!/glazed/.test(n)?mix(c,[152,94,67],.55):c;}
+  m=n.match(WOOD_RE);
+  if(m){
+    if(/leaves|sapling|propagule/.test(n)) return m[1]==='cherry'?[240,184,208]:m[1]==='pale_oak'?[150,160,140]:[78,140,52];
+    const c=hexToRgb(WOOD[m[1]]);
+    return /_(log|wood|stem|hyphae)$/.test(n)&&!/^stripped_/.test(n)?mix(c,[40,28,20],.6):c;
+  }
+  for(const [re,hex] of COLORS) if(re.test(n)) return hexToRgb(hex);
+  return hsl(((hash(n)%360)+360)%360,.32,.62);
+}
+const PATTERNS={
+  noise:(x,y,r,c)=>vary(c,.06,r),
+  stone:(x,y,r,c)=>{const off=(y/5|0)%2?2:0;if(y%5===4||(x+off)%6===5) return vary(mix(c,BLACK,.3),.08,r);return vary(mix(c,WHITE,r()*.2),.04,r);},
+  planks:(x,y,r,c)=>{const band=y>>2;if(y%4===3) return vary(mix(c,BLACK,.35),.05,r);if(x===[3,11,7,14][band]) return vary(mix(c,BLACK,.25),.05,r);return vary(mix(c,BLACK,[0,.05,.02,.08][band]),.04,r);},
+  bark:(x,y,r,c)=>vary(x%4===0||(x*7+y*3)%11===0?mix(c,BLACK,.3):c,.08,r),
+  rings:(x,y,r,c)=>{const d=Math.hypot(x-7.5,y-7.5);if(d>6.6) return vary(mix(c,BLACK,.45),.06,r);return vary((d*.9|0)%2?c:mix(c,BLACK,.15),.04,r);},
+  brick:(x,y,r,c)=>{const row=y>>2;if(y%4===3||(x+(row%2?4:0))%8===7) return vary(mix(c,BLACK,.4),.06,r);return vary(row%2?c:mix(c,BLACK,.1),.06,r);},
+  leaves:(x,y,r,c)=>r()<.14?[0,0,0,0]:vary(mix(c,BLACK,r()*.35),.05,r),
+  glass:(x,y,r,c)=>{if(x===0||y===0||x===15||y===15) return [...mix(c,WHITE,.45),235];if((x===y+3&&x>4&&x<10)||(x===y+5&&x>6&&x<10)) return [255,255,255,200];return [...mix(c,WHITE,.3),70];},
+  water:(x,y,r,c)=>[...vary((x+y*3)%9===0?mix(c,WHITE,.25):c,.05,r),180],
+  grassSide:(x,y,r)=>y<3||(y===3&&r()<.5)?vary([95,155,60],.08,r):vary([134,96,67],.07,r),
+  plant:(x,y,r,c)=>{
+    if(Math.hypot(x-7.5,y-4.5)<3.3) return vary(c,.08,r);
+    if((x===7||x===8)&&y>6) return vary([72,128,48],.08,r);
+    if((x===5||x===10)&&y>10) return vary([84,140,56],.08,r);
+    return [0,0,0,0];
+  },
+  dots:(x,y,r,c)=>r()<.24?vary(c,.1,r):[0,0,0,0]
+};
+function patternOf(n,kind){
+  if(n[0]==='#') return 'noise';
+  if(kind==='plant') return 'plant';
+  if(kind==='flat') return /lichen|vine|vein/.test(n)?'leaves':'dots';
+  if(/water|lava/.test(n)) return 'water';
+  if(/glass/.test(n)) return 'glass';
+  if(/leaves/.test(n)) return 'leaves';
+  if(/^(grass_block|podzol|mycelium)_side$/.test(n)) return 'grassSide';
+  if(/_(log|stem)_top$/.test(n)) return 'rings';
+  if(/_(log|stem)$/.test(n)) return 'bark';
+  if(/planks|trapdoor|_door|shelf|bookshelf|barrel|crafting/.test(n)) return 'planks';
+  if(/brick|tiles/.test(n)) return 'brick';
+  if(/cobble|^stone$|andesite|diorite|granite|deepslate|tuff|blackstone|basalt/.test(n)&&!/polished|smooth/.test(n)) return 'stone';
+  return 'noise';
+}
+
+/* ---------- Texturen: Platzhalter, später echte Dateien ---------- */
 function makeTex(cv){const t=new THREE.CanvasTexture(cv);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;return t;}
-function getType(id){
-  if(typeCache.has(id)) return typeCache.get(id);
-  let side,top,opts={};
-  let seed=0;for(const ch of id) seed=(seed*31+ch.charCodeAt(0))|0;
-  if(id==='log'){side=paint(PAINTERS.logSide,seed);top=paint(PAINTERS.logTop,seed+1);}
-  else if(PAINTERS[id]){side=paint(PAINTERS[id],seed);top=side;}
-  else{const rgb=hexToRgb(id);side=paint((x,y,r)=>vary(rgb,.05,r),seed);top=side;}
-  if(id==='glass') opts={transparent:true,depthWrite:false};
-  if(id==='leaves') opts={alphaTest:.5,side:THREE.DoubleSide};
-  const sideMat=new THREE.MeshLambertMaterial(Object.assign({map:makeTex(side)},opts));
-  let mats=sideMat;
-  if(top!==side){const topMat=new THREE.MeshLambertMaterial({map:makeTex(top)});mats=[sideMat,sideMat,topMat,topMat,sideMat,sideMat];}
-  const t={side,top,mats,swatch:top.toDataURL()};
-  typeCache.set(id,t);return t;
+function bump(f){f.ver++;f.swatch=null;f.tex.dispose();f.tex.needsUpdate=true;}
+function paintPlaceholder(f){
+  const n=f.cands[0],c=colorOf(n),fn=PATTERNS[patternOf(n,f.kind)];
+  const cv=f.cv;cv.width=cv.height=16;
+  const ctx=cv.getContext('2d');const img=ctx.createImageData(16,16);const r=rng(hash(n));
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+    const p=fn(x,y,r,c);const i=(y*16+x)*4;
+    img.data[i]=p[0];img.data[i+1]=p[1];img.data[i+2]=p[2];img.data[i+3]=p.length>3?p[3]:255;
+  }
+  ctx.putImageData(img,0,0);
+  f.found=null;bump(f);
 }
 
-/* ---------- Sample build ---------- */
+let texFiles=new Map(),texGen=0,useRelative=/^https?:$/.test(location.protocol);
+const faceCache=new Map();
+function faceTex(cands,kind){
+  const key=cands.join('|');
+  let f=faceCache.get(key);if(f) return f;
+  const cv=document.createElement('canvas');
+  f={key,cands,kind,cv,tex:makeTex(cv),found:null,pending:false,ver:0,swatch:null};
+  faceCache.set(key,f);
+  paintPlaceholder(f);findReal(f);
+  return f;
+}
+function swatchOf(f){return f.swatch||(f.swatch=f.cv.toDataURL());}
+function loadImage(src){return new Promise(res=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});}
+async function loadTexImage(n){
+  const blob=texFiles.get(n);
+  if(blob){const url=URL.createObjectURL(blob);const im=await loadImage(url);URL.revokeObjectURL(url);return im;}
+  return useRelative?loadImage(TEX_DIR+encodeURIComponent(n)+'.png'):null;
+}
+async function findReal(f){
+  const gen=texGen;f.pending=true;
+  for(const n of f.cands){
+    if(n[0]==='#') break;
+    const im=await loadTexImage(n);
+    if(gen!==texGen) return;
+    if(im&&applyReal(f,im,n)) break;
+  }
+  f.pending=false;texChanged();
+}
+function applyReal(f,im,n){
+  const s=im.naturalWidth,h=Math.min(s,im.naturalHeight); // animierte Texturen: nur das erste Bild
+  if(!s) return false;
+  const cv=f.cv;cv.width=s;cv.height=h;
+  const ctx=cv.getContext('2d');ctx.drawImage(im,0,0,s,h,0,0,s,h);
+  if(TINTS[n]){
+    ctx.globalCompositeOperation='multiply';ctx.fillStyle=TINTS[n];ctx.fillRect(0,0,s,h);
+    ctx.globalCompositeOperation='destination-in';ctx.drawImage(im,0,0,s,h,0,0,s,h);
+    ctx.globalCompositeOperation='source-over';
+  }
+  if(!texFiles.has(n)){ // per URL geladen: der Browser kann den Zugriff sperren (file://)
+    try{ctx.getImageData(0,0,1,1);}catch(e){useRelative=false;paintPlaceholder(f);return false;}
+  }
+  f.found=n;bump(f);return true;
+}
+function setTexFiles(map){
+  texFiles=map;texGen++;
+  for(const f of faceCache.values()){if(f.found) paintPlaceholder(f);findReal(f);}
+  texChanged();
+}
+
+// Texturnamen für die Seiten eines Blocks
+function faceNames(name,kind){
+  const L=v=>Array.isArray(v)?v:[v];
+  if(name[0]==='#') return {top:[name],side:[name],bottom:[name]};
+  const o=TEXTURES[name];
+  if(o!==undefined){
+    if(typeof o==='string'||Array.isArray(o)) return {top:L(o),side:L(o),bottom:L(o)};
+    return {top:L(o.top||o.side),side:L(o.side||o.top),bottom:L(o.bottom||o.top||o.side)};
+  }
+  if(name.startsWith('waxed_')) return faceNames(name.slice(6),kind);
+  if(kind!=='block') return {top:[name],side:[name],bottom:[name]};
+  const m=name.match(/^(.*)_(wood|hyphae)$/);
+  if(m){const n=m[1]+(m[2]==='wood'?'_log':'_stem');return {top:[n],side:[n],bottom:[n]};}
+  return {top:[name+'_top',name],side:[name+'_side',name],bottom:[name+'_bottom',name+'_top',name]};
+}
+function modeOf(name,kind){
+  if(/glass|^water$|^ice$|slime_block|honey_block/.test(name)&&!/tinted/.test(name)) return 'translucent';
+  if(kind!=='block'||/leaves|iron_bars|cobweb|trapdoor|_door|ladder|rail|rod$|chain$|lantern|torch|candle|bamboo/.test(name)) return 'cutout';
+  return 'opaque';
+}
+const matCache=new Map(),setCache=new Map();
+function matFor(face,mode){
+  const key=face.key+'|'+mode;let m=matCache.get(key);
+  if(!m){
+    const opts=mode==='translucent'?{transparent:true,depthWrite:false}:mode==='cutout'?{alphaTest:.5,side:THREE.DoubleSide}:{alphaTest:.5};
+    m=new THREE.MeshLambertMaterial(Object.assign({map:face.tex},opts));matCache.set(key,m);
+  }
+  return m;
+}
+function getSet(name,kind){
+  const key=kind+':'+name;let s=setCache.get(key);if(s) return s;
+  const fn=faceNames(name,kind),mode=modeOf(name,kind);
+  const faces={top:faceTex(fn.top,kind),side:faceTex(fn.side,kind),bottom:faceTex(fn.bottom,kind)};
+  s={key,faces,translucent:mode==='translucent',mats:[matFor(faces.side,mode),matFor(faces.top,mode),matFor(faces.bottom,mode)]};
+  setCache.set(key,s);return s;
+}
+
+/* ---------- Blockformen ---------- */
+// Maße in 1/16 Block wie in Minecraft-Modellen: [x0,y0,z0,x1,y1,z1, UV Seiten?, UV oben/unten?].
+// Gedrehte Formen sind für „facing=east“ beschrieben und werden um die Hochachse gedreht.
+const FULL=[[0,0,0,16,16,16]];
+const DIRS={east:0,south:1,west:2,north:3};
+function rot(boxes,q){
+  return boxes.map(b=>{
+    let [x0,y0,z0,x1,y1,z1]=b;
+    for(let i=0;i<(q||0);i++){[x0,z0,x1,z1]=[16-z1,x0,16-z0,x1];}
+    return [x0,y0,z0,x1,y1,z1,...b.slice(6)];
+  });
+}
+const flipY=boxes=>boxes.map(b=>[b[0],16-b[4],b[2],b[3],16-b[1],b[5],...b.slice(6)]);
+const STAIRS={straight:[[8,8,0,16,16,16]],outer_right:[[8,8,8,16,16,16]],outer_left:[[8,8,0,16,16,8]],inner_right:[[8,8,0,16,16,16],[0,8,8,8,16,16]],inner_left:[[8,8,0,16,16,16],[0,8,0,8,16,8]]};
+function stairBoxes(p){const b=rot([[0,0,0,16,8,16],...(STAIRS[p.shape]||STAIRS.straight)],DIRS[p.facing]);return p.half==='top'?flipY(b):b;}
+function connect(p,post,arm){
+  const out=post.slice();
+  for(const d of ['north','east','south','west']){const a=arm(p[d]);if(a) out.push(...rot(a,DIRS[d]));}
+  return out;
+}
+function gateBoxes(p){
+  const dy=p.in_wall==='true'?-3:0;
+  const b=[[7,5,0,9,16,2],[7,5,14,9,16,16]];
+  if(p.open==='true') b.push([9,6,0,16,9,2],[9,12,0,16,15,2],[14,9,0,16,12,2],[9,6,14,16,9,16],[9,12,14,16,15,16],[14,9,14,16,12,16]);
+  else b.push([7,6,2,9,9,14],[7,12,2,9,15,14],[7,9,6,9,12,10]);
+  return rot(b.map(x=>[x[0],x[1]+dy,x[2],x[3],x[4]+dy,x[5]]),DIRS[p.facing]);
+}
+function faceBoxes(p){
+  const out=[];
+  if(p.down==='true') out.push([0,0,0,16,1,16]);
+  if(p.up==='true') out.push([0,15,0,16,16,16]);
+  for(const d of ['north','east','south','west']) if(p[d]==='true') out.push(...rot([[15,0,0,16,16,16]],DIRS[d]));
+  return out.length?out:[[0,0,0,16,1,16]];
+}
+const CANDLES=[[[8,8]],[[6,7],[10,8]],[[6,9],[8,6],[10,9]],[[6,6],[10,6],[6,10],[10,10]]];
+const CROSS_RE=/(_sapling|_tulip|_mushroom|_fungus|_propagule)$|^(dandelion|poppy|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|wither_rose|torchflower|open_eyeblossom|closed_eyeblossom|short_grass|tall_grass|fern|large_fern|dead_bush|bush|firefly_bush|short_dry_grass|tall_dry_grass|sweet_berry_bush|lilac|rose_bush|peony|sunflower|pitcher_plant|cobweb|sugar_cane|crimson_roots|warped_roots|nether_sprouts|hanging_roots|cave_vines|cave_vines_plant|weeping_vines|weeping_vines_plant|twisting_vines|twisting_vines_plant|kelp|kelp_plant|seagrass|tall_seagrass|cactus_flower|spore_blossom|pale_hanging_moss|bamboo_sapling)$/;
+const SHAPES={
+  decorated_pot:[[1,0,1,15,16,15]], enchanting_table:[[0,0,0,16,12,16]], dirt_path:[[0,0,0,16,15,16]],
+  farmland:[[0,0,0,16,15,16]], cactus:[[1,0,1,15,16,15]], bamboo:[[6,0,6,10,16,10]], flower_pot:[[5,0,5,11,6,11]]
+};
+const WOOD_TYPE_RE=/^(pale_oak|dark_oak|oak|spruce|birch|jungle|acacia|mangrove|cherry|bamboo|crimson|warped)$/;
+const MATERIAL_ALIAS={quartz:'quartz_block',purpur:'purpur_block',petrified_oak:'oak_planks',light_weighted:'gold_block',heavy_weighted:'iron_block'};
+// Grundblock von Stufen, Treppen, Zäunen …: „cherry“ → „cherry_planks“, „mud_brick“ → „mud_bricks“
+function materialOf(base){
+  if(MATERIAL_ALIAS[base]) return MATERIAL_ALIAS[base];
+  if(WOOD_TYPE_RE.test(base)) return base+'_planks';
+  if(/(^|_)(brick|tile)$/.test(base)) return base+'s';
+  return base;
+}
+// Liefert die Teile eines Blocks: {boxes|cross, t: Texturname, k: block|plant|flat, axis, r: Drehung}
+function partsOf(id,p){
+  const B=(boxes,t,axis)=>({boxes,t,k:'block',axis});
+  let m;
+  if(id[0]==='#') return [B(FULL,id)];
+  if(id==='water'||id==='lava'){const l=+p.level||0;return [B([[0,0,0,16,l===0||l>=8?14:Math.max(2,14-2*l),16]],id)];}
+  if((m=id.match(/^(.+)_slab$/))) return [B(p.type==='double'?FULL:p.type==='top'?[[0,8,0,16,16,16]]:[[0,0,0,16,8,16]],materialOf(m[1]))];
+  if((m=id.match(/^(.+)_stairs$/))) return [B(stairBoxes(p),materialOf(m[1]))];
+  if((m=id.match(/^(.+)_fence_gate$/))) return [B(gateBoxes(p),materialOf(m[1]))];
+  if((m=id.match(/^(.+)_fence$/))) return [B(connect(p,[[6,0,6,10,16,10]],v=>v==='true'&&[[10,12,7,16,15,9],[10,6,7,16,9,9]]),materialOf(m[1]))];
+  if((m=id.match(/^(.+)_wall$/))) return [B(connect(p,p.up==='false'?[]:[[4,0,4,12,16,12]],v=>v==='tall'?[[8,0,5,16,16,11]]:(v==='low'||v==='true')&&[[8,0,5,16,14,11]]),materialOf(m[1]))];
+  if(/_pane$|^iron_bars$/.test(id)) return [B(connect(p,[[7,0,7,9,16,9]],v=>v==='true'&&[[9,0,7,16,16,9]]),id.replace(/_pane$/,''))];
+  if(/_trapdoor$/.test(id)) return [B(p.open==='true'?rot([[0,0,0,3,16,16]],DIRS[p.facing]):p.half==='top'?[[0,13,0,16,16,16]]:[[0,0,0,16,3,16]],id)];
+  if(/_door$/.test(id)) return [B(rot([[0,0,0,3,16,16]],DIRS[p.facing]),id+(p.half==='upper'?'_top':'_bottom'))];
+  if(/_carpet$/.test(id)){const c=id.slice(0,-7);return [B([[0,0,0,16,1,16]],DYE[c]?c+'_wool':c==='moss'?'moss_block':id)];}
+  if(/_pressure_plate$/.test(id)) return [B([[1,0,1,15,1,15]],materialOf(id.slice(0,-15)))];
+  if(/_button$/.test(id)) return [B([[5,0,6,11,2,10]],materialOf(id.slice(0,-7)))];
+  if(id==='snow') return [B([[0,0,0,16,Math.min(16,2*(+p.layers||1)),16]],id)];
+  if(/^(pink_petals|wildflowers|leaf_litter|lily_pad)$/.test(id)) return [{boxes:[[0,0,0,16,1,16]],t:id,k:'flat'}];
+  if(/^(glow_lichen|vine|sculk_vein|resin_clump)$/.test(id)) return [{boxes:faceBoxes(p),t:id,k:'flat'}];
+  if(/(^|_)candle$/.test(id)){
+    const pos=CANDLES[Math.max(1,Math.min(4,+p.candles||1))-1];
+    return [B(pos.map(([x,z])=>[x-1,0,z-1,x+1,6,z+1,[0,8,2,14],[0,6,2,8]]),id+(p.lit==='true'?'_lit':''))];
+  }
+  if(/lightning_rod$|^end_rod$/.test(id)) return [Object.assign(B([[7,0,7,9,12,9,[0,4,2,16],[0,4,2,6]],[6,12,6,10,16,10,[0,0,4,4],[0,0,4,4]]],id),{r:p.facing})];
+  if(/(^|_)chain$/.test(id)) return [Object.assign(B([[7,0,7,9,16,9,[0,0,3,16],[0,0,3,3]]],id),{r:p.axis==='x'?'east':p.axis==='z'?'south':undefined})];
+  if(/(^|_)lantern$/.test(id)){const dy=p.hanging==='true'?1:0;return [B([[5,dy,5,11,7+dy,11,[0,2,6,9],[0,9,6,15]],[6,7+dy,6,10,9+dy,10,[1,0,5,2],[1,10,5,14]]],id)];}
+  if(/(^|_)torch$/.test(id)) return [B([[7,0,7,9,10,9]],id.replace('wall_',''))];
+  if(id==='ladder') return [B(rot([[0,0,0,1,16,16]],DIRS[p.facing]),id)];
+  if(id.startsWith('potted_')) return [B(SHAPES.flower_pot,'flower_pot'),{cross:'pot',t:id.slice(7),k:'plant'}];
+  if(CROSS_RE.test(id)){
+    let t=id;
+    if(p.half==='upper'||p.half==='lower') t+=p.half==='upper'?'_top':'_bottom';
+    if(p.berries==='true') t+='_lit';
+    return [{cross:'full',t,k:'plant'}];
+  }
+  if(SHAPES[id]) return [B(SHAPES[id],id)];
+  return [B(FULL,id+(p.lit==='true'&&/copper_bulb$/.test(id)?'_lit':''),/^[xz]$/.test(p.axis)?p.axis:undefined)];
+}
+
+const geoCache=new Map();
+function boxesGeo(boxes,axis){
+  const key=(axis||'')+JSON.stringify(boxes);
+  let g=geoCache.get(key);if(g) return g;
+  const pos=[],nor=[],uv=[],idx=[[],[],[]];let base=0;
+  // Materialplatz je Würfelseite (+x,-x,+y,-y,+z,-z): 0 Seite, 1 oben, 2 unten
+  const slot=axis==='x'?[1,2,0,0,0,0]:axis==='z'?[0,0,0,0,1,2]:[0,0,1,2,0,0];
+  for(const b of boxes){
+    const [x0,y0,z0,x1,y1,z1]=b.slice(0,6).map(v=>v/16),sideUV=b[6],endUV=b[7];
+    const bg=new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0);
+    bg.translate((x0+x1)/2-.5,(y0+y1)/2-.5,(z0+z1)/2-.5);
+    const P=bg.attributes.position,N=bg.attributes.normal,U=bg.attributes.uv;
+    for(let i=0;i<P.count;i++){
+      const x=P.getX(i)+.5,y=P.getY(i)+.5,z=P.getZ(i)+.5,nx=N.getX(i),ny=N.getY(i),nz=N.getZ(i);
+      const box=ny?endUV:sideUV;let u,v;
+      if(box){u=(box[0]+(box[2]-box[0])*U.getX(i))/16;v=1-(box[1]+(box[3]-box[1])*(1-U.getY(i)))/16;}
+      else if(ny){u=x;v=1-z;if(axis==='x'){u=z;v=x;}}               // Textur wie in Minecraft an der Blockposition ausrichten
+      else if(nx){u=nx>0?1-z:z;v=y;if(axis==='z'){u=y;v=nx>0?1-z:z;}}
+      else{u=nz>0?x:1-x;v=y;if(axis==='x'){u=y;v=nz>0?x:1-x;}}
+      pos.push(P.getX(i),P.getY(i),P.getZ(i));nor.push(nx,ny,nz);uv.push(u,v);
+    }
+    for(const gr of bg.groups) for(let i=gr.start;i<gr.start+gr.count;i++) idx[slot[gr.materialIndex]].push(bg.index.getX(i)+base);
+    base+=P.count;bg.dispose();
+  }
+  g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  const all=[];idx.forEach((a,m)=>{if(a.length){g.addGroup(all.length,a.length,m);all.push(...a);}});
+  g.setIndex(all);
+  geoCache.set(key,g);return g;
+}
+function crossGeo(kind){
+  const key='cross:'+kind;let g=geoCache.get(key);if(g) return g;
+  const s=kind==='pot'?.75:1,d=.45*s,y0=kind==='pot'?-.25:-.5,y1=y0+s;
+  const pos=[-d,y0,-d, d,y0,d, d,y1,d, -d,y1,-d,  -d,y0,d, d,y0,-d, d,y1,-d, -d,y1,d];
+  g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('normal',new THREE.Float32BufferAttribute(Array(8).fill([0,1,0]).flat(),3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1, 0,0,1,0,1,1,0,1],2));
+  g.setIndex([0,1,2,0,2,3,4,5,6,4,6,7]);g.addGroup(0,12,0);
+  geoCache.set(key,g);return g;
+}
+const ROTS={
+  down:new THREE.Matrix4().makeRotationX(Math.PI),
+  north:new THREE.Matrix4().makeRotationX(-Math.PI/2),south:new THREE.Matrix4().makeRotationX(Math.PI/2),
+  east:new THREE.Matrix4().makeRotationZ(-Math.PI/2),west:new THREE.Matrix4().makeRotationZ(Math.PI/2)
+};
+
+/* ---------- Blockzustände ---------- */
+const AIR=new Set(['air','cave_air','void_air','structure_void']);
+const DIR_DE={north:'Norden',south:'Süden',east:'Osten',west:'Westen',up:'oben',down:'unten'};
+function parseState(s){
+  s=String(s).trim();
+  const i=s.indexOf('[');
+  let id=(i<0?s:s.slice(0,i)).trim().toLowerCase();
+  if(id.startsWith('minecraft:')) id=id.slice(10);
+  const p={};
+  if(i>=0) s.slice(i+1).replace(/\]\s*$/,'').split(',').forEach(kv=>{const j=kv.indexOf('=');if(j>0) p[kv.slice(0,j).trim()]=kv.slice(j+1).trim();});
+  return {id,p};
+}
+function infoOf(id,p){
+  const out=[];
+  if(/_slab$/.test(id)) out.push({top:'obere Hälfte',bottom:'untere Hälfte',double:'doppelt (2 Stufen)'}[p.type]);
+  if(/_stairs$/.test(id)){
+    out.push('hohe Seite: '+(DIR_DE[p.facing]||p.facing));
+    if(p.half==='top') out.push('kopfüber');
+    out.push({inner_left:'Innenecke links',inner_right:'Innenecke rechts',outer_left:'Außenecke links',outer_right:'Außenecke rechts'}[p.shape]);
+  }else if(DIR_DE[p.facing]) out.push('Richtung: '+DIR_DE[p.facing]);
+  if(/_trapdoor$/.test(id)&&p.open!=='true') out.push(p.half==='top'?'oben angebracht':'unten angebracht');
+  if(p.half==='upper'||p.half==='lower') out.push(p.half==='upper'?'obere Hälfte':'untere Hälfte');
+  if(p.axis) out.push({x:'liegend, Ost–West',y:'stehend',z:'liegend, Nord–Süd'}[p.axis]);
+  if(p.face) out.push({floor:'am Boden',wall:'an der Wand',ceiling:'an der Decke'}[p.face]);
+  if(p.open==='true') out.push('offen');
+  if(p.lit==='true') out.push('leuchtet');
+  if(p.hinge) out.push('Scharnier '+(p.hinge==='left'?'links':'rechts'));
+  if(p.candles) out.push(p.candles+(p.candles==='1'?' Kerze':' Kerzen'));
+  if(p.flower_amount) out.push(p.flower_amount+' Stück');
+  if(id==='snow'&&p.layers) out.push(p.layers+' Schichten');
+  if(id==='water'||id==='lava') out.push(p.level&&p.level!=='0'?'fließend':'Quelle');
+  return out.filter(Boolean).join(', ');
+}
+const POT_ITEMS={azalea_bush:'azalea',flowering_azalea_bush:'flowering_azalea'};
+// Was man für diesen Block ins Inventar braucht
+function itemsOf(id,p,parts){
+  if(p.half==='upper'||p.part==='head') return [];
+  if((id==='water'||id==='lava')&&p.level&&p.level!=='0') return [];
+  if(id.startsWith('potted_')){const pl=id.slice(7);return [{id:'flower_pot',n:1,set:parts[0].set},{id:POT_ITEMS[pl]||pl,n:1,set:parts[1].set}];}
+  let item=id.replace(/(^|_)wall_(?=.)/,'$1');
+  if(id==='cave_vines'||id==='cave_vines_plant') item='glow_berries';
+  else if(/(vines|kelp)_plant$/.test(id)) item=id.slice(0,-6);
+  let n=1;
+  if(/_slab$/.test(id)&&p.type==='double') n=2;
+  else for(const k of ['candles','flower_amount','segment_amount','pickles','eggs','layers']) if(p[k]){n=+p[k]||1;break;}
+  return [{id:item,n,set:parts[0].set}];
+}
+function describeState(full){
+  const {id,p}=parseState(full);
+  if(!id||AIR.has(id)) return null;
+  let raw;
+  try{raw=partsOf(id,p);}catch(e){raw=[{boxes:FULL,t:id,k:'block'}];}
+  const parts=raw.map(r=>({geo:r.cross?crossGeo(r.cross):boxesGeo(r.boxes,r.axis),set:getSet(r.t,r.k),rot:r.r&&ROTS[r.r]?r.r:null}));
+  return {full,id,p,parts,items:itemsOf(id,p,parts),info:infoOf(id,p)};
+}
+function pretty(id){
+  const i=id.indexOf(':'),base=i<0?id:id.slice(i+1);
+  const s=base.split('_').filter(Boolean).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');
+  return i<0?s:`${s} (${id.slice(0,i)})`;
+}
+function nameOf(id){return (state.b&&state.b.names[id])||NAMES[id]||(id[0]==='#'?id:pretty(id));}
+
+const MAX_BLOCKS=300000;
+function makeBuilder(){
+  const index=new Map(),states=[],blocks=[];
+  return {
+    add(x,y,z,s){
+      let k=index.get(s);
+      if(k===undefined){const st=describeState(s);k=st?states.push(st)-1:-1;index.set(s,k);}
+      if(k<0) return;
+      if(blocks.length>=MAX_BLOCKS) throw new Error(`Mehr als ${MAX_BLOCKS.toLocaleString('de-DE')} Blöcke – das ist zu groß für die Anzeige.`);
+      blocks.push({x,y,z,s:k});
+    },
+    finish(name,names,dims){
+      if(!blocks.length) throw new Error('Der Bauplan enthält keine Blöcke.');
+      if(!dims){ // leere Ränder abschneiden
+        let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;
+        for(const b of blocks){x0=Math.min(x0,b.x);y0=Math.min(y0,b.y);z0=Math.min(z0,b.z);x1=Math.max(x1,b.x);y1=Math.max(y1,b.y);z1=Math.max(z1,b.z);}
+        for(const b of blocks){b.x-=x0;b.y-=y0;b.z-=z0;}
+        dims={w:x1-x0+1,h:y1-y0+1,d:z1-z0+1};
+      }
+      return Object.assign({name,names:names||{},states,blocks},dims);
+    }
+  };
+}
+
+/* ---------- .schem-Dateien (Sponge-Format v1–v3, gzip-komprimiertes NBT) ---------- */
+async function gunzip(u8){
+  if(typeof DecompressionStream==='undefined') throw new Error('Dieser Browser kann die komprimierte Datei nicht entpacken. Bitte einen aktuellen Chrome, Edge, Firefox oder Safari benutzen.');
+  const s=new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+function readNBT(u8){
+  const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength),td=new TextDecoder();let p=0;
+  const str=()=>{const n=dv.getUint16(p);p+=2;const s=td.decode(u8.subarray(p,p+n));p+=n;return s;};
+  const tag=t=>{
+    switch(t){
+      case 1:return dv.getInt8(p++);
+      case 2:p+=2;return dv.getInt16(p-2);
+      case 3:p+=4;return dv.getInt32(p-4);
+      case 4:p+=8;return null;
+      case 5:p+=4;return dv.getFloat32(p-4);
+      case 6:p+=8;return dv.getFloat64(p-8);
+      case 7:{const n=dv.getInt32(p);p+=4+n;return u8.subarray(p-n,p);}
+      case 8:return str();
+      case 9:{const et=dv.getInt8(p++),n=dv.getInt32(p);p+=4;const a=[];for(let i=0;i<n;i++) a.push(tag(et));return a;}
+      case 10:{const o={};for(let t2;(t2=dv.getInt8(p++))!==0;){const k=str();o[k]=tag(t2);}return o;}
+      case 11:{const n=dv.getInt32(p);p+=4+4*n;return null;}
+      case 12:{const n=dv.getInt32(p);p+=4+8*n;return null;}
+      default:throw new Error('Unbekannter NBT-Typ '+t);
+    }
+  };
+  if(dv.getInt8(p++)!==10) throw new Error('Keine NBT-Datei.');
+  str();return tag(10);
+}
+async function parseSchem(buf,fileName){
+  let u8=new Uint8Array(buf);
+  if(u8[0]===0x1f&&u8[1]===0x8b) u8=await gunzip(u8);
+  let root;
+  try{root=readNBT(u8);}catch(e){throw new Error('Die Datei konnte nicht gelesen werden. Ist es wirklich eine .schem-Datei?');}
+  const isObj=v=>v&&v.constructor===Object;
+  const S=isObj(root.Schematic)?root.Schematic:root;
+  const B=isObj(S.Blocks)?S.Blocks:S;
+  const pal=B.Palette,data=B.Data||B.BlockData;
+  if(!isObj(pal)||!(data instanceof Uint8Array)){
+    if(S.Materials||S.Blocks instanceof Uint8Array) throw new Error('Das ist das alte MCEdit-Format (.schematic). Bitte in WorldEdit mit „//schem save <Name> sponge“ neu speichern.');
+    throw new Error('In der Datei wurden keine Blockdaten im Sponge-Format (.schem) gefunden.');
+  }
+  const W=S.Width,H=S.Height,L=S.Length,n=W*H*L;
+  if(!(n>0)) throw new Error('Die Datei enthält keine gültige Größe.');
+  const names=[];for(const k in pal) names[pal[k]]=k;
+  const bld=makeBuilder();let i=0;
+  for(let idx=0;idx<n;idx++){
+    let v=0,sh=0,b;
+    do{if(i>=data.length) throw new Error('Die Blockdaten sind unvollständig.');b=data[i++];v|=(b&127)<<sh;sh+=7;}while(b&128);
+    const s=names[v];
+    if(s===undefined) throw new Error('Die Blockpalette in der Datei ist fehlerhaft.');
+    bld.add(idx%W,(idx/(W*L))|0,((idx/W)|0)%L,s);
+  }
+  const meta=isObj(S.Metadata)?S.Metadata:{};
+  const name=String(meta.Name||fileName.replace(/\.[^.]+$/,'').replace(/_/g,' ').replace(/\s*\(\d+\)$/,'').trim()||'Schematic');
+  return bld.finish(name,{},null);
+}
+
+/* ---------- Beispielhaus und eigene JSON-Baupläne ---------- */
+const LEGACY={stone:['cobblestone','Bruchstein'],planks:['oak_planks','Holzbretter'],log:['oak_log[axis=y]','Baumstamm'],glass:['glass','Glas'],brick:['bricks','Dachziegel'],leaves:['oak_leaves[persistent=true]','Laub']};
+const HEX_RE=/^#[0-9a-f]{6}$/i,BLOCK_RE=/^([a-z0-9_.-]+:)?[a-z0-9_./-]+(\[[^\]]*\])?$/i;
 function sampleHouse(){
   const W=11,D=9,H=10;
   const g=[...Array(H)].map(()=>[...Array(D)].map(()=>Array(W).fill('.')));
@@ -297,25 +763,25 @@ function toJSONText(b){
   const layers=b.layers.map(l=>'    [\n'+l.map(r=>'      '+JSON.stringify(r)).join(',\n')+'\n    ]').join(',\n');
   return `{\n  "name": ${JSON.stringify(b.name||'')},\n  "palette": ${JSON.stringify(b.palette)},\n  "layers": [\n${layers}\n  ]\n}`;
 }
-
-/* ---------- Parsing ---------- */
 function parseBuild(obj){
   if(!obj||typeof obj!=='object'||Array.isArray(obj)) throw new Error('Der Bauplan muss ein JSON-Objekt sein.');
   const pal=obj.palette,layers=obj.layers;
-  if(!pal||typeof pal!=='object') throw new Error('Es fehlt "palette", die Zeichen einem Blocktyp zuordnet.');
+  if(!pal||typeof pal!=='object') throw new Error('Es fehlt "palette", die Zeichen einem Block zuordnet.');
   if(!Array.isArray(layers)||!layers.length) throw new Error('Es fehlt "layers" mit mindestens einer Ebene.');
   const map={},names={};
   for(const [ch,v] of Object.entries(pal)){
     if([...ch].length!==1) throw new Error(`Palette-Schlüssel „${ch}“ muss genau ein Zeichen sein.`);
     if(ch==='.'||ch===' ') throw new Error('„.“ und Leerzeichen sind für Luft reserviert.');
-    let id,name;
-    if(typeof v==='string'&&BASE_TYPES[v]){id=v;name=BASE_TYPES[v].name;}
-    else if(typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v)){id=v.toLowerCase();name=v;}
-    else if(v&&typeof v==='object'&&/^#[0-9a-f]{6}$/i.test(v.color||'')){id=v.color.toLowerCase();name=String(v.name||v.color);}
-    else throw new Error(`Unbekannter Blocktyp für „${ch}“. Erlaubt sind ${Object.keys(BASE_TYPES).join(', ')}, eine Farbe wie "#c2a36b" oder {"color":"#c2a36b","name":"Sandstein"}.`);
-    map[ch]=id;names[id]=name;
+    let s,nm;
+    if(typeof v==='string'&&LEGACY[v]) [s,nm]=LEGACY[v];
+    else if(typeof v==='string'&&HEX_RE.test(v)){s=v.toLowerCase();nm=v;}
+    else if(v&&typeof v==='object'&&HEX_RE.test(v.color||'')){s=v.color.toLowerCase();nm=String(v.name||v.color);}
+    else if(v&&typeof v==='object'&&typeof v.block==='string'&&BLOCK_RE.test(v.block.trim())){s=v.block;if(v.name) nm=String(v.name);}
+    else if(typeof v==='string'&&BLOCK_RE.test(v.trim())) s=v;
+    else throw new Error(`Unbekannter Block für „${ch}“. Erlaubt sind Minecraft-IDs wie "minecraft:oak_planks", die Kurznamen ${Object.keys(LEGACY).join(', ')}, eine Farbe wie "#c2a36b" oder {"color":"#c2a36b","name":"Sandstein"}.`);
+    map[ch]=s;if(nm) names[parseState(s).id]=nm;
   }
-  const blocks=[];let w=0,d=0;
+  const bld=makeBuilder();let w=0,d=0;
   layers.forEach((layer,y)=>{
     if(!Array.isArray(layer)) throw new Error(`Ebene ${y+1} muss eine Liste von Zeilen sein.`);
     d=Math.max(d,layer.length);
@@ -324,15 +790,13 @@ function parseBuild(obj){
       const chars=[...row];w=Math.max(w,chars.length);
       chars.forEach((ch,x)=>{
         if(ch==='.'||ch===' ') return;
-        const id=map[ch];
-        if(!id) throw new Error(`Ebene ${y+1}, Reihe ${z+1}: Zeichen „${ch}“ steht nicht in der Palette.`);
-        blocks.push({x,y,z,t:id});
+        const s=map[ch];
+        if(!s) throw new Error(`Ebene ${y+1}, Reihe ${z+1}: Zeichen „${ch}“ steht nicht in der Palette.`);
+        bld.add(x,y,z,s);
       });
     });
   });
-  if(!blocks.length) throw new Error('Der Bauplan enthält keine Blöcke.');
-  if(blocks.length>60000) throw new Error('Mehr als 60.000 Blöcke. Teile den Bauplan bitte auf.');
-  return {name:String(obj.name||'Ohne Namen'),blocks,names,w,h:layers.length,d};
+  return bld.finish(String(obj.name||'Ohne Namen'),names,{w,h:layers.length,d});
 }
 
 /* ---------- Three.js setup ---------- */
@@ -354,9 +818,10 @@ const ghostMat=new THREE.MeshBasicMaterial({color:0x1E2B3F,transparent:true,opac
 const edgeMat=new THREE.LineBasicMaterial({color:0xF0C93A});
 const layerGridMat=new THREE.LineBasicMaterial({color:0x56616F,transparent:true,opacity:.55});
 const groundMat=new THREE.LineBasicMaterial({color:0x56616F,transparent:true,opacity:.22});
+const unitBox=new THREE.BoxGeometry(1,1,1);
 
-const state={b:null,cur:0,cutX:0,cutZ:0,typeMeshes:[],ghost:null,edges:null,layerGrid:null,layerMap:[],layerCounts:[],layerTypeCounts:[],totals:{}};
-const opt={below:true,dim:true,ghost:false};
+const state={b:null,cur:0,cutX:0,cutZ:0,typeMeshes:[],ghost:null,edges:null,layerGrid:null,layerMap:[],layerCounts:[],layerItems:[],totals:{},faces:new Set()};
+const opt={below:true,dim:true,ghost:false,only:false};
 
 function gridGeo(w,d,m){
   const p=[],x0=-w/2-m,x1=w/2+m,z0=-d/2-m,z1=d/2+m;
@@ -377,33 +842,42 @@ function applyTheme(){
 
 function loadBuild(b){
   stopPlay();
-  root.traverse(o=>{if(o.geometry) o.geometry.dispose();});
+  for(const o of root.children) if(o.isLineSegments) o.geometry.dispose(); // Blockgeometrien bleiben im Cache
   root.clear();
   state.b=b;state.cur=b.h-1;state.cutX=b.w-1;state.cutZ=b.d-1;
 
-  const byType={};state.totals={};
-  state.layerMap=[...Array(b.h)].map(()=>new Array(b.w*b.d).fill(null));
+  const groups=new Map();state.totals={};state.faces=new Set();
+  state.layerMap=[...Array(b.h)].map(()=>new Int32Array(b.w*b.d).fill(-1));
   state.layerCounts=new Array(b.h).fill(0);
-  state.layerTypeCounts=[...Array(b.h)].map(()=>({}));
+  state.layerItems=[...Array(b.h)].map(()=>({}));
+  const addFaces=s=>{state.faces.add(s.faces.top);state.faces.add(s.faces.side);state.faces.add(s.faces.bottom);};
+  for(const st of b.states){st.parts.forEach(pt=>addFaces(pt.set));st.items.forEach(it=>addFaces(it.set));}
   for(const bl of b.blocks){
-    (byType[bl.t]=byType[bl.t]||[]).push(bl);
-    state.totals[bl.t]=(state.totals[bl.t]||0)+1;
-    state.layerMap[bl.y][bl.z*b.w+bl.x]=bl.t;
+    const st=b.states[bl.s];
+    for(const pt of st.parts){
+      const key=pt.geo.uuid+'|'+pt.set.key+'|'+(pt.rot||'');
+      let g=groups.get(key);if(!g) groups.set(key,g={geo:pt.geo,set:pt.set,rot:pt.rot,list:[]});
+      g.list.push(bl);
+    }
+    for(const it of st.items){
+      const t=state.totals[it.id]||(state.totals[it.id]={n:0,set:it.set});t.n+=it.n;
+      const li=state.layerItems[bl.y];li[it.id]=(li[it.id]||0)+it.n;
+    }
+    state.layerMap[bl.y][bl.z*b.w+bl.x]=bl.s;
     state.layerCounts[bl.y]++;
-    const lt=state.layerTypeCounts[bl.y];lt[bl.t]=(lt[bl.t]||0)+1;
   }
 
-  const box=new THREE.BoxGeometry(1,1,1);
   const white=new THREE.Color(1,1,1);
-  state.typeMeshes=Object.entries(byType).map(([id,list])=>{
-    const m=new THREE.InstancedMesh(box,getType(id).mats,list.length);
+  state.typeMeshes=[...groups.values()].map(g=>{
+    const m=new THREE.InstancedMesh(g.geo,g.set.mats,g.list.length);
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    for(let i=0;i<list.length;i++) m.setColorAt(i,white);
+    for(let i=0;i<g.list.length;i++) m.setColorAt(i,white);
     m.frustumCulled=false;
-    m.userData={id,list,slots:[]};
+    if(g.set.translucent) m.renderOrder=1;
+    m.userData={list:g.list,rot:g.rot?ROTS[g.rot]:null,slots:[]};
     root.add(m);return m;
   });
-  state.ghost=new THREE.InstancedMesh(box,ghostMat,b.blocks.length);
+  state.ghost=new THREE.InstancedMesh(unitBox,ghostMat,b.blocks.length);
   state.ghost.frustumCulled=false;state.ghost.renderOrder=2;root.add(state.ghost);
 
   const maxLayer=Math.max(...state.layerCounts);
@@ -414,12 +888,12 @@ function loadBuild(b){
   state.layerGrid=new THREE.LineSegments(gridGeo(b.w,b.d,0),layerGridMat);root.add(state.layerGrid);
   const ground=new THREE.LineSegments(gridGeo(b.w,b.d,3),groundMat);ground.position.y=-.003;root.add(ground);
 
-  $('buildName').textContent=`${b.name}: ${b.blocks.length} Blöcke, ${b.w} × ${b.d} Felder, ${b.h} Ebenen`;
+  $('buildName').textContent=`${b.name}: ${b.blocks.length.toLocaleString('de-DE')} Blöcke, ${b.w} × ${b.d} Felder, ${b.h} Ebenen`;
   $('indTotal').textContent=b.h;
   $('layer').max=b.h;
   $('cutX').max=b.w;$('cutX').value=b.w;
   $('cutZ').max=b.d;$('cutZ').value=b.d;
-  renderTower();resetView();update();
+  renderTower();resetView();update();renderTexInfo();
 }
 
 const M=new THREE.Matrix4(),C=new THREE.Color();
@@ -429,14 +903,15 @@ function updateScene(){
   const {b,cur,cutX,cutZ}=state;
   const px=x=>x-b.w/2+.5,pz=z=>z-b.d/2+.5;
   for(const tm of state.typeMeshes){
-    let n=0;const slots=tm.userData.slots;slots.length=0;
+    let n=0;const {slots,rot}=tm.userData;slots.length=0;
     for(const bl of tm.userData.list){
       if(bl.x>cutX||bl.z>cutZ) continue;
       let s;
       if(bl.y===cur) s=1;
       else if(bl.y<cur&&opt.below) s=opt.dim?.56:1;
       else continue;
-      M.makeTranslation(px(bl.x),bl.y+.5,pz(bl.z));tm.setMatrixAt(n,M);
+      M.makeTranslation(px(bl.x),bl.y+.5,pz(bl.z));if(rot) M.multiply(rot);
+      tm.setMatrixAt(n,M);
       C.setRGB(s,s,s);tm.setColorAt(n,C);slots[n]=bl;n++;
     }
     tm.count=n;tm.instanceMatrix.needsUpdate=true;if(tm.instanceColor) tm.instanceColor.needsUpdate=true;
@@ -478,12 +953,14 @@ function renderTower(){
 }
 
 function renderMaterials(){
-  const lt=state.layerTypeCounts[state.cur];
-  const ids=Object.keys(state.totals).sort((a,b)=>(lt[b]||0)-(lt[a]||0)||state.totals[b]-state.totals[a]);
+  const li=state.layerItems[state.cur];
+  let ids=Object.keys(state.totals);
+  if(opt.only) ids=ids.filter(id=>li[id]);
+  ids.sort((a,b)=>(li[b]||0)-(li[a]||0)||state.totals[b].n-state.totals[a].n||nameOf(a).localeCompare(nameOf(b),'de'));
   $('mats').innerHTML=ids.map(id=>{
-    const n=lt[id]||0;
-    return `<tr class="${n?'':'zero'}"><td><span class="nm"><img alt="" src="${getType(id).swatch}">${esc(state.b.names[id])}</span></td><td class="here">${n}</td><td>${state.totals[id]}</td></tr>`;
-  }).join('');
+    const n=li[id]||0,t=state.totals[id];
+    return `<tr class="${n?'':'zero'}"><td><span class="nm"><img alt="" src="${swatchOf(t.set.faces.top)}">${esc(nameOf(id))}</span></td><td class="here">${n}</td><td>${t.n}</td></tr>`;
+  }).join('')||'<tr class="zero"><td colspan="3">Auf dieser Ebene liegt nichts.</td></tr>';
 }
 
 function drawMap(){
@@ -497,10 +974,11 @@ function drawMap(){
   const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,W,H);
   const s=getComputedStyle(document.documentElement),v=n=>s.getPropertyValue(n).trim();
   const here=state.layerMap[cur],below=cur>0?state.layerMap[cur-1]:null;
+  const topOf=k=>b.states[k].parts[0].set.faces.top.cv;
   for(let z=0;z<b.d;z++)for(let x=0;x<b.w;x++){
     const X=lab+x*cell,Y=lab+z*cell,i=z*b.w+x;
-    if(here[i]){ctx.globalAlpha=1;ctx.drawImage(getType(here[i]).top,X,Y,cell,cell);}
-    else if(below&&below[i]){ctx.globalAlpha=.22;ctx.drawImage(getType(below[i]).top,X,Y,cell,cell);}
+    if(here[i]>=0){ctx.globalAlpha=1;ctx.drawImage(topOf(here[i]),X,Y,cell,cell);}
+    else if(below&&below[i]>=0){ctx.globalAlpha=.22;ctx.drawImage(topOf(below[i]),X,Y,cell,cell);}
     if(x>state.cutX||z>state.cutZ){ctx.globalAlpha=.65;ctx.fillStyle=v('--panel');ctx.fillRect(X,Y,cell,cell);}
   }
   ctx.globalAlpha=1;ctx.strokeStyle=v('--line');ctx.lineWidth=1;ctx.beginPath();
@@ -569,6 +1047,7 @@ $('cutZ').addEventListener('input',e=>{state.cutZ=+e.target.value-1;update();});
 $('optBelow').addEventListener('change',e=>{opt.below=e.target.checked;$('optDim').disabled=!opt.below;update();});
 $('optDim').addEventListener('change',e=>{opt.dim=e.target.checked;update();});
 $('optGhost').addEventListener('change',e=>{opt.ghost=e.target.checked;update();});
+$('optOnly').addEventListener('change',e=>{opt.only=e.target.checked;renderMaterials();});
 $('reset').addEventListener('click',resetView);
 $('play').addEventListener('click',togglePlay);
 
@@ -579,22 +1058,148 @@ window.addEventListener('keydown',e=>{
   else if(e.key==='ArrowDown'||e.key==='PageDown'){e.preventDefault();setLayer(state.cur-1);}
 });
 
-/* ---------- Loading builds ---------- */
+/* ---------- Texturen-Bereich ---------- */
+let texUiTimer=null;
+function texChanged(){
+  if(texUiTimer) return;
+  texUiTimer=setTimeout(()=>{texUiTimer=null;renderTexInfo();if(state.b){renderMaterials();drawMap();}},150);
+}
+// „x_top, x“ / „x_side, x“ / „x_bottom, x_top, x“ werden zusammen als „x.png“ gelistet
+function missingLabel(cands){
+  const base=cands[cands.length-1];
+  if(cands.every(c=>c===base||c===base+'_top'||c===base+'_side'||c===base+'_bottom')) return base+'.png';
+  return cands.map(n=>n+'.png').join(' oder ');
+}
+function renderTexInfo(){
+  const faces=[...state.faces].filter(f=>f.cands[0][0]!=='#');
+  const pending=faces.some(f=>f.pending);
+  const found=new Set(faces.filter(f=>f.found).map(f=>f.found));
+  const missing=[...new Set(faces.filter(f=>!f.found&&!f.pending).map(f=>missingLabel(f.cands)))].sort();
+  const haveSource=texFiles.size>0||useRelative;
+  let msg;
+  if(!faces.length) msg='Dieser Bauplan nutzt nur eigene Farben.';
+  else if(pending) msg='Suche Texturen …';
+  else if(!found.size) msg=haveSource?'Keine passenden Texturdateien gefunden – es werden Platzhalter angezeigt.':'Noch keine Texturen geladen – es werden Platzhalter angezeigt.';
+  else if(!missing.length) msg=`Alle ${found.size} Texturen gefunden.`;
+  else msg=`${found.size} Texturen gefunden, ${missing.length} fehlen noch (dort Platzhalter).`;
+  $('texInfo').textContent=msg;
+  $('missingWrap').hidden=!(haveSource&&missing.length&&!pending);
+  $('missingTitle').textContent=`Fehlende Texturdateien (${missing.length})`;
+  $('missing').value=missing.join('\n');
+}
+function setTexStatus(msg,err){const s=$('texStatus');s.textContent=msg;s.classList.toggle('error',!!err);}
+async function addTextures(map,msg){
+  const merged=new Map([...texFiles,...map]);
+  setTexFiles(merged);setTexStatus(msg);
+  try{await idbSet('textures',merged);}
+  catch(e){setTexStatus(msg+' Speichern im Browser war nicht möglich, beim nächsten Mal bitte erneut wählen.');}
+}
+const texName=f=>f.name.replace(/\.png$/i,'').toLowerCase();
+function loadScript(src){
+  return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('JSZip konnte nicht geladen werden. Besteht eine Internetverbindung?'));document.head.appendChild(s);});
+}
+async function readZipTextures(file){
+  if(!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+  const zip=await JSZip.loadAsync(file);
+  const map=new Map(),jobs=[];
+  zip.forEach((path,entry)=>{
+    const m=!entry.dir&&path.match(/(?:^|\/)textures\/block\/([^/]+)\.png$/i);
+    if(m) jobs.push(entry.async('blob').then(b=>map.set(m[1].toLowerCase(),new Blob([b],{type:'image/png'}))));
+  });
+  await Promise.all(jobs);
+  if(!map.size) throw new Error(`In ${file.name} gibt es keinen Ordner textures/block.`);
+  return map;
+}
+async function openZip(f){
+  setTexStatus(`Lese ${f.name} …`);
+  try{const map=await readZipTextures(f);await addTextures(map,`${map.size} Texturen aus ${f.name} übernommen.`);}
+  catch(err){setTexStatus(err.message||'Die Datei konnte nicht gelesen werden.',true);}
+}
+$('texDir').addEventListener('change',e=>{
+  const files=[...e.target.files].filter(f=>/\.png$/i.test(f.name));e.target.value='';
+  if(!files.length){setTexStatus('Im gewählten Ordner sind keine PNG-Dateien.',true);return;}
+  const path=f=>(f.webkitRelativePath||f.name).replace(/\\/g,'/');
+  const inBlock=files.filter(f=>/(^|\/)textures\/block\//i.test(path(f)));
+  const map=new Map((inBlock.length?inBlock:files).map(f=>[texName(f),f]));
+  addTextures(map,`${map.size} Texturen aus dem Ordner übernommen.`);
+});
+$('texZip').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f) openZip(f);});
+$('texClear').addEventListener('click',()=>{setTexFiles(new Map());idbDel('textures').catch(()=>{});setTexStatus('Gespeicherte Texturen entfernt.');});
+
+/* ---------- Speicher im Browser (letzter Bauplan, Texturen) ---------- */
+function idb(mode,fn){
+  return new Promise((res,rej)=>{
+    if(!window.indexedDB) return rej(new Error('IndexedDB fehlt'));
+    let r;try{r=indexedDB.open('bauanleitung-viewer',1);}catch(e){return rej(e);}
+    r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+    r.onerror=()=>rej(r.error);
+    r.onsuccess=()=>{
+      const db=r.result,tx=db.transaction('kv',mode),q=fn(tx.objectStore('kv'));
+      tx.oncomplete=()=>{db.close();res(q&&q.result);};
+      tx.onerror=tx.onabort=()=>{db.close();rej(tx.error);};
+    };
+  });
+}
+const idbGet=k=>idb('readonly',s=>s.get(k));
+const idbSet=(k,v)=>idb('readwrite',s=>s.put(v,k));
+const idbDel=k=>idb('readwrite',s=>s.delete(k));
+const remember=v=>idbSet('last',v).catch(()=>{});
+
+/* ---------- Baupläne laden ---------- */
+let userLoaded=false;
 function setStatus(msg,err){const s=$('status');s.textContent=msg;s.classList.toggle('error',!!err);}
-function loadFromText(text){
+function setSchemStatus(msg,err){const s=$('schemStatus');s.textContent=msg;s.classList.toggle('error',!!err);}
+async function openSchem(buf,fileName,persist){
+  setSchemStatus(`Lese ${fileName} …`);
+  try{
+    const b=await parseSchem(buf,fileName);
+    loadBuild(b);
+    setSchemStatus(`„${b.name}“ geladen: ${b.states.length} verschiedene Blockzustände.`);
+    if(persist) remember({kind:'schem',name:fileName,data:buf});
+  }catch(err){setSchemStatus(err.message||'Die Datei konnte nicht gelesen werden.',true);console.error(err);}
+}
+function openSchemFile(f){
+  userLoaded=true;
+  f.arrayBuffer().then(buf=>openSchem(buf,f.name,true),()=>setSchemStatus('Die Datei konnte nicht gelesen werden.',true));
+}
+function loadFromText(text,persist){
   let obj;
   try{obj=JSON.parse(text);}catch(err){setStatus('Das JSON ist ungültig: '+err.message,true);return;}
-  try{const b=parseBuild(obj);loadBuild(b);setStatus(`„${b.name}“ geladen: ${b.blocks.length} Blöcke in ${b.h} Ebenen.`);}
-  catch(err){setStatus(err.message,true);}
+  try{
+    const b=parseBuild(obj);loadBuild(b);
+    setStatus(`„${b.name}“ geladen: ${b.blocks.length} Blöcke in ${b.h} Ebenen.`);
+    if(persist) remember({kind:'json',text});
+  }catch(err){setStatus(err.message,true);}
 }
-$('load').addEventListener('click',()=>loadFromText($('json').value));
-$('sample').addEventListener('click',()=>{$('json').value=toJSONText(sampleHouse());loadFromText($('json').value);});
-$('file').addEventListener('change',e=>{
-  const f=e.target.files&&e.target.files[0];if(!f) return;
+function openJsonFile(f){
+  userLoaded=true;
   const r=new FileReader();
-  r.onload=()=>{$('json').value=String(r.result);loadFromText(r.result);};
+  r.onload=()=>{$('json').value=String(r.result);loadFromText(String(r.result),true);};
   r.onerror=()=>setStatus('Die Datei konnte nicht gelesen werden.',true);
-  r.readAsText(f);e.target.value='';
+  r.readAsText(f);
+}
+$('schemFile').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f) openSchemFile(f);});
+$('load').addEventListener('click',()=>{userLoaded=true;loadFromText($('json').value,true);});
+$('sample').addEventListener('click',()=>{userLoaded=true;$('json').value=toJSONText(sampleHouse());loadFromText($('json').value,false);idbDel('last').catch(()=>{});});
+$('file').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f) openJsonFile(f);});
+
+// Dateien auf die Seite ziehen: .schem, .json, .jar/.zip oder einzelne PNG-Texturen
+let dragDepth=0;
+const hasFiles=e=>e.dataTransfer&&[...e.dataTransfer.types].includes('Files');
+window.addEventListener('dragenter',e=>{if(hasFiles(e)){dragDepth++;document.body.classList.add('dragging');}});
+window.addEventListener('dragleave',e=>{if(hasFiles(e)&&--dragDepth<=0){dragDepth=0;document.body.classList.remove('dragging');}});
+window.addEventListener('dragover',e=>{if(hasFiles(e)) e.preventDefault();});
+window.addEventListener('drop',e=>{
+  if(!hasFiles(e)) return;
+  e.preventDefault();dragDepth=0;document.body.classList.remove('dragging');
+  const files=[...e.dataTransfer.files];
+  const pngs=files.filter(f=>/\.png$/i.test(f.name));
+  for(const f of files){
+    if(/\.schem(atic)?$/i.test(f.name)) openSchemFile(f);
+    else if(/\.json$/i.test(f.name)) openJsonFile(f);
+    else if(/\.(jar|zip)$/i.test(f.name)) openZip(f);
+  }
+  if(pngs.length) addTextures(new Map(pngs.map(f=>[texName(f),f])),`${pngs.length} Texturen übernommen.`);
 });
 
 /* ---------- Hover tooltip ---------- */
@@ -608,7 +1213,8 @@ function doHover(e){
   const hits=ray.intersectObjects(state.typeMeshes,false);
   const h=hits[0];const bl=h&&h.object.userData.slots[h.instanceId];
   if(!bl){tip.hidden=true;return;}
-  tip.innerHTML=`${esc(state.b.names[bl.t])}<span>Ebene ${bl.y+1}, Spalte ${bl.x+1}, Reihe ${bl.z+1}</span>`;
+  const st=state.b.states[bl.s];
+  tip.innerHTML=`${esc(nameOf(st.id))}${st.info?`<span>${esc(st.info)}</span>`:''}<span>Ebene ${bl.y+1}, Spalte ${bl.x+1}, Reihe ${bl.z+1}</span>`;
   tip.hidden=false;
   const sr=stage.getBoundingClientRect();
   let left=e.clientX-sr.left+14,top=e.clientY-sr.top+14;
@@ -641,6 +1247,24 @@ loadBuild(parseBuild(sampleHouse()));
 resize();
 document.fonts&&document.fonts.ready.then(drawMap);
 loop();
+
+// Start: ?schem=<Datei> (über einen Webserver), sonst das zuletzt Geöffnete aus dem Browser-Speicher
+(async()=>{
+  try{const t=await idbGet('textures');if(t&&t.size){setTexFiles(t);setTexStatus(`${t.size} gespeicherte Texturen geladen.`);}}catch(e){}
+  const q=new URLSearchParams(location.search).get('schem');
+  if(q){
+    userLoaded=true;
+    try{const r=await fetch(q);if(!r.ok) throw new Error(r.status);await openSchem(await r.arrayBuffer(),q.split('/').pop(),false);}
+    catch(e){setSchemStatus(`„${q}“ konnte nicht geladen werden.`,true);}
+    return;
+  }
+  try{
+    const last=await idbGet('last');
+    if(!last||userLoaded) return;
+    if(last.kind==='schem') await openSchem(last.data,last.name,false);
+    else if(last.kind==='json'){$('json').value=last.text;loadFromText(last.text,false);}
+  }catch(e){}
+})();
 })();
 </script>
 </body>
