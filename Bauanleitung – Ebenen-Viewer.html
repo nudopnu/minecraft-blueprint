@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bauanleitung – Ebenen-Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E9EDE6; --panel:#F6F7F3; --ink:#1E2B3F; --muted:#56616F; --line:#C6CEC3;
+  --grid:rgba(30,43,63,.055); --accent:#F0C93A; --stage:#D5DDD2; --btn:#FFFFFF;
+  --focus:#2E62C9; --error:#B3261E;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#151A20; --panel:#1C2229; --ink:#E4E9E1; --muted:#9BA5B0; --line:#333C47;
+    --grid:rgba(228,233,225,.04); --accent:#F2CB3C; --stage:#0F1318; --btn:#252C35;
+    --focus:#8DB3FF; --error:#FF8A80; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#151A20; --panel:#1C2229; --ink:#E4E9E1; --muted:#9BA5B0; --line:#333C47;
+  --grid:rgba(228,233,225,.04); --accent:#F2CB3C; --stage:#0F1318; --btn:#252C35;
+  --focus:#8DB3FF; --error:#FF8A80; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.45}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 370px}
+.stage{position:relative;min-height:0;min-width:0;background:var(--stage);overflow:hidden}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none}
+
+.tower{position:absolute;left:12px;top:12px;max-height:calc(100% - 76px);display:flex;flex-direction:column-reverse;gap:3px;overflow-y:auto;padding:2px}
+.tower button{flex:0 0 auto;display:grid;grid-template-columns:22px 34px;align-items:center;gap:6px;height:24px;padding:0 6px;border:1px solid var(--line);background:var(--btn);color:var(--ink);border-radius:3px;font:700 12px/1 "Atkinson Hyperlegible",system-ui,sans-serif;cursor:pointer;text-align:right}
+.tower button.above{color:var(--muted);opacity:.7}
+.tower .bar{height:6px;background:var(--line);border-radius:1px;overflow:hidden}
+.tower .bar i{display:block;height:100%;background:var(--muted)}
+.tower button[aria-current="step"]{background:var(--accent);border-color:var(--accent);color:#1E2B3F;opacity:1}
+.tower button[aria-current="step"] .bar{background:rgba(30,43,63,.25)}
+.tower button[aria-current="step"] .bar i{background:#1E2B3F}
+
+.actions{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.hint{position:absolute;left:12px;bottom:16px;font-size:12.5px;color:var(--muted);pointer-events:none}
+.tip{position:absolute;pointer-events:none;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:6px 9px;font-size:13px;line-height:1.35;box-shadow:0 4px 14px rgba(0,0,0,.16);white-space:nowrap;z-index:2}
+.tip span{display:block;color:var(--muted)}
+
+.panel{min-height:0;overflow-y:auto;background-color:var(--panel);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:16px 16px;border-left:1px solid var(--line);padding:22px 22px 32px}
+.panel h1{font-family:"Bricolage Grotesque",Georgia,serif;font-weight:800;font-size:28px;line-height:1.05;letter-spacing:-.01em;margin:0}
+.sub{color:var(--muted);margin:6px 0 0;font-size:14px}
+
+.indicator{display:flex;align-items:baseline;gap:10px;margin-top:22px}
+.ind-label,.ind-of,.ind-count{font-size:15px;color:var(--muted)}
+.ind-num{font-family:"Bricolage Grotesque",Georgia,serif;font-weight:800;font-size:64px;line-height:.9;padding:0 .08em;background:linear-gradient(transparent 58%,var(--accent) 58%,var(--accent) 92%,transparent 92%);font-variant-numeric:tabular-nums}
+.ind-count{margin-left:auto}
+.stepper{display:flex;gap:8px;align-items:center;margin-top:14px}
+
+.block{margin-top:26px}
+.block h2{font-family:"Bricolage Grotesque",Georgia,serif;font-weight:500;font-size:17px;margin:0 0 10px}
+
+.btn{font:700 14px/1 "Atkinson Hyperlegible",system-ui,sans-serif;color:var(--ink);background:var(--btn);border:1px solid var(--line);border-radius:4px;padding:10px 12px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.square{width:38px;height:38px;padding:0;display:grid;place-items:center;font-size:13px}
+.btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+input[type=range]{accent-color:var(--ink);width:100%;margin:0}
+
+.map-wrap{border:1px solid var(--line);background:var(--panel);padding:8px;overflow-x:auto}
+.map-wrap canvas{display:block}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0}
+
+.mats{width:100%;border-collapse:collapse;font-size:14px}
+.mats th{font-weight:400;color:var(--muted);text-align:right;padding:0 0 6px;font-size:13px}
+.mats th:first-child{text-align:left}
+.mats td{padding:5px 0;border-top:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.mats td:first-child{text-align:left}
+.mats .nm{display:flex;align-items:center;gap:8px}
+.mats img{width:20px;height:20px;image-rendering:pixelated;border:1px solid var(--line);flex:0 0 auto}
+.mats td.here{font-weight:700}
+.mats tr.zero td{color:var(--muted)}
+.mats tr.zero img{opacity:.45}
+
+.field{margin-top:12px}
+.field label{display:flex;justify-content:space-between;gap:10px;font-size:14px;margin-bottom:6px}
+.field output{color:var(--muted);font-variant-numeric:tabular-nums}
+.check{display:flex;gap:10px;align-items:center;font-size:14px;margin-top:10px;cursor:pointer}
+.check input{accent-color:var(--ink);width:18px;height:18px;margin:0}
+
+details summary{cursor:pointer;font-family:"Bricolage Grotesque",Georgia,serif;font-weight:500;font-size:17px}
+details p{font-size:13.5px;color:var(--muted);margin:10px 0}
+details code{font-size:12.5px}
+textarea{width:100%;min-height:240px;resize:vertical;font:12px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--ink);background:var(--btn);border:1px solid var(--line);border-radius:4px;padding:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.file-btn{position:relative;overflow:hidden}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.status{font-size:13px;margin-top:8px;min-height:1.2em;color:var(--muted)}
+.status.error{color:var(--error)}
+
+@media (max-width: 880px){
+  html,body{height:auto}
+  .app{height:auto;grid-template-columns:1fr}
+  .stage{height:62vh;min-height:340px}
+  .panel{border-left:0;border-top:1px solid var(--line);overflow:visible}
+}
+@media (max-width: 560px){ .hint{display:none} }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <div class="tower" id="tower" aria-label="Ebenen"></div>
+    <div class="tip" id="tip" hidden></div>
+    <div class="hint">Ziehen zum Drehen, Rechtsklick zum Verschieben, Mausrad zum Zoomen</div>
+    <div class="actions">
+      <button class="btn" id="reset" type="button">Ansicht zurücksetzen</button>
+      <button class="btn primary" id="play" type="button" aria-pressed="false">Ebenen abspielen</button>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <h1>Bauanleitung</h1>
+    <p class="sub" id="buildName"></p>
+
+    <div class="indicator" aria-live="polite">
+      <span class="ind-label">Ebene</span>
+      <span class="ind-num" id="indNum">1</span>
+      <span class="ind-of">von <span id="indTotal">1</span></span>
+      <span class="ind-count" id="indCount"></span>
+    </div>
+    <div class="stepper">
+      <button class="btn square" id="down" type="button" aria-label="Eine Ebene tiefer">▼</button>
+      <input type="range" id="layer" min="1" max="1" value="1" aria-label="Ebene wählen">
+      <button class="btn square" id="up" type="button" aria-label="Eine Ebene höher">▲</button>
+    </div>
+
+    <section class="block">
+      <h2>Draufsicht dieser Ebene</h2>
+      <div class="map-wrap"><canvas id="map"></canvas></div>
+      <p class="note">Blass dargestellt: die Ebene darunter. Der untere Rand ist die Vorderseite.</p>
+    </section>
+
+    <section class="block">
+      <h2>Material</h2>
+      <table class="mats">
+        <thead><tr><th>Block</th><th>Diese Ebene</th><th>Gesamt</th></tr></thead>
+        <tbody id="mats"></tbody>
+      </table>
+    </section>
+
+    <section class="block">
+      <h2>Querschnitt</h2>
+      <div class="field">
+        <label for="cutX">Spalten zeigen <output id="cutXOut"></output></label>
+        <input type="range" id="cutX" min="1" max="1" value="1">
+      </div>
+      <div class="field">
+        <label for="cutZ">Reihen zeigen <output id="cutZOut"></output></label>
+        <input type="range" id="cutZ" min="1" max="1" value="1">
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Anzeige</h2>
+      <label class="check"><input type="checkbox" id="optBelow" checked> Fertige Ebenen darunter zeigen</label>
+      <label class="check"><input type="checkbox" id="optDim" checked> Ebenen darunter abdunkeln</label>
+      <label class="check"><input type="checkbox" id="optGhost"> Kommende Ebenen als Umriss zeigen</label>
+    </section>
+
+    <section class="block">
+      <details>
+        <summary>Eigenen Bauplan laden</summary>
+        <p>Jede Ebene ist eine Liste von Zeilen, die erste Ebene ist die unterste. Jedes Zeichen ist ein Block, <code>.</code> ist Luft. In <code>palette</code> ordnest du Zeichen einem Blocktyp zu: <code>stone</code>, <code>planks</code>, <code>log</code>, <code>glass</code>, <code>brick</code>, <code>leaves</code>, eine Farbe wie <code>"#c2a36b"</code> oder <code>{"color":"#c2a36b","name":"Sandstein"}</code>.</p>
+        <textarea id="json" spellcheck="false" aria-label="Bauplan als JSON"></textarea>
+        <div class="row">
+          <button class="btn primary" id="load" type="button">Bauplan laden</button>
+          <span class="btn file-btn">JSON-Datei öffnen<input type="file" id="file" accept=".json,application/json"></span>
+          <button class="btn" id="sample" type="button">Beispielhaus wiederherstellen</button>
+        </div>
+        <div class="status" id="status" role="status"></div>
+      </details>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- Block types with procedural pixel textures ---------- */
+const BASE_TYPES = {
+  stone:{name:'Bruchstein'}, planks:{name:'Holzbretter'}, log:{name:'Baumstamm'},
+  glass:{name:'Glas'}, brick:{name:'Dachziegel'}, leaves:{name:'Laub'}
+};
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hexToRgb(h){const n=parseInt(h.slice(1),16);return[n>>16&255,n>>8&255,n&255];}
+function vary(rgb,amt,r){const f=1+(r()*2-1)*amt;return rgb.map(v=>Math.max(0,Math.min(255,Math.round(v*f))));}
+function paint(fn,seed){
+  const cv=document.createElement('canvas');cv.width=cv.height=16;
+  const ctx=cv.getContext('2d');const img=ctx.createImageData(16,16);const r=rng(seed);
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+    const c=fn(x,y,r);const i=(y*16+x)*4;
+    img.data[i]=c[0];img.data[i+1]=c[1];img.data[i+2]=c[2];img.data[i+3]=c.length>3?c[3]:255;
+  }
+  ctx.putImageData(img,0,0);return cv;
+}
+const PAINTERS = {
+  stone:(x,y,r)=>{
+    const off=Math.floor(y/5)%2?2:0;
+    if(y%5===4||(x+off)%6===5) return vary([88,91,94],.08,r);
+    const pal=[[122,125,128],[140,143,145],[156,158,160],[108,111,114]];
+    return vary(pal[Math.floor(r()*4)],.04,r);
+  },
+  planks:(x,y,r)=>{
+    const band=Math.floor(y/4);
+    if(y%4===3) return vary([110,78,46],.06,r);
+    if(x===[3,11,7,14][band]) return vary([120,85,51],.05,r);
+    return vary([[168,124,78],[160,117,72],[172,128,82],[156,113,70]][band],.05,r);
+  },
+  logSide:(x,y,r)=>{
+    const dark=x%4===0||(x*7+y*3)%11===0;
+    return vary(dark?[74,54,34]:[98,73,47],.08,r);
+  },
+  logTop:(x,y,r)=>{
+    const d=Math.hypot(x-7.5,y-7.5);
+    if(d>6.6) return vary([90,67,42],.06,r);
+    return vary(Math.floor(d*.9)%2?[176,134,86]:[150,110,68],.04,r);
+  },
+  glass:(x)=>[0,0,0,0], // replaced below
+  brick:(x,y,r)=>{
+    const row=Math.floor(y/4);
+    if(y%4===3) return vary([92,40,32],.06,r);
+    if((x+(row%2?4:0))%8===7) return vary([92,40,32],.06,r);
+    return vary(row%2?[168,70,54]:[150,60,46],.06,r);
+  },
+  leaves:(x,y,r)=>{
+    if(r()<.14) return [0,0,0,0];
+    const pal=[[58,112,44],[74,134,52],[44,92,34],[86,146,60]];
+    return vary(pal[Math.floor(r()*4)],.05,r);
+  }
+};
+PAINTERS.glass=(x,y)=>{
+  if(x===0||y===0||x===15||y===15) return [214,236,240,235];
+  if((x===y+3&&x>4&&x<10)||(x===y+5&&x>6&&x<10)) return [255,255,255,200];
+  return [190,222,232,45];
+};
+
+const typeCache=new Map();
+function makeTex(cv){const t=new THREE.CanvasTexture(cv);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;return t;}
+function getType(id){
+  if(typeCache.has(id)) return typeCache.get(id);
+  let side,top,opts={};
+  let seed=0;for(const ch of id) seed=(seed*31+ch.charCodeAt(0))|0;
+  if(id==='log'){side=paint(PAINTERS.logSide,seed);top=paint(PAINTERS.logTop,seed+1);}
+  else if(PAINTERS[id]){side=paint(PAINTERS[id],seed);top=side;}
+  else{const rgb=hexToRgb(id);side=paint((x,y,r)=>vary(rgb,.05,r),seed);top=side;}
+  if(id==='glass') opts={transparent:true,depthWrite:false};
+  if(id==='leaves') opts={alphaTest:.5,side:THREE.DoubleSide};
+  const sideMat=new THREE.MeshLambertMaterial(Object.assign({map:makeTex(side)},opts));
+  let mats=sideMat;
+  if(top!==side){const topMat=new THREE.MeshLambertMaterial({map:makeTex(top)});mats=[sideMat,sideMat,topMat,topMat,sideMat,sideMat];}
+  const t={side,top,mats,swatch:top.toDataURL()};
+  typeCache.set(id,t);return t;
+}
+
+/* ---------- Sample build ---------- */
+function sampleHouse(){
+  const W=11,D=9,H=10;
+  const g=[...Array(H)].map(()=>[...Array(D)].map(()=>Array(W).fill('.')));
+  const set=(x,y,z,c)=>{if(x>=0&&x<W&&y>=0&&y<H&&z>=0&&z<D) g[y][z][x]=c;};
+  for(let x=1;x<=9;x++)for(let z=1;z<=7;z++) set(x,0,z,'C');
+  for(let y=1;y<=4;y++)for(let x=1;x<=9;x++)for(let z=1;z<=7;z++){
+    const edge=x===1||x===9||z===1||z===7; if(!edge) continue;
+    const corner=(x===1||x===9)&&(z===1||z===7);
+    set(x,y,z,y===4||corner?'O':'P');
+  }
+  set(5,1,7,'.');set(5,2,7,'.');
+  [[3,2,7],[7,2,7],[3,2,1],[5,2,1],[7,2,1],[1,2,4],[9,2,4]].forEach(p=>set(p[0],p[1],p[2],'G'));
+  [[5,0,8],[6,1,7],[7,2,6],[8,3,5],[9,4,4]].forEach(([y,za,zb])=>{for(let x=0;x<=10;x++){set(x,y,za,'B');set(x,y,zb,'B');}});
+  for(let y=5;y<=8;y++)for(let z=y-4;z<=12-y;z++){set(1,y,z,'P');set(9,y,z,'P');}
+  set(1,6,4,'G');set(9,6,4,'G');
+  set(5,0,8,'C');
+  [[0,0,5],[0,0,6],[0,1,6],[10,0,2],[10,0,3]].forEach(p=>set(p[0],p[1],p[2],'L'));
+  return {name:'Kleines Holzhaus',palette:{C:'stone',P:'planks',O:'log',G:'glass',B:'brick',L:'leaves'},layers:g.map(l=>l.map(r=>r.join('')))};
+}
+function toJSONText(b){
+  const layers=b.layers.map(l=>'    [\n'+l.map(r=>'      '+JSON.stringify(r)).join(',\n')+'\n    ]').join(',\n');
+  return `{\n  "name": ${JSON.stringify(b.name||'')},\n  "palette": ${JSON.stringify(b.palette)},\n  "layers": [\n${layers}\n  ]\n}`;
+}
+
+/* ---------- Parsing ---------- */
+function parseBuild(obj){
+  if(!obj||typeof obj!=='object'||Array.isArray(obj)) throw new Error('Der Bauplan muss ein JSON-Objekt sein.');
+  const pal=obj.palette,layers=obj.layers;
+  if(!pal||typeof pal!=='object') throw new Error('Es fehlt "palette", die Zeichen einem Blocktyp zuordnet.');
+  if(!Array.isArray(layers)||!layers.length) throw new Error('Es fehlt "layers" mit mindestens einer Ebene.');
+  const map={},names={};
+  for(const [ch,v] of Object.entries(pal)){
+    if([...ch].length!==1) throw new Error(`Palette-Schlüssel „${ch}“ muss genau ein Zeichen sein.`);
+    if(ch==='.'||ch===' ') throw new Error('„.“ und Leerzeichen sind für Luft reserviert.');
+    let id,name;
+    if(typeof v==='string'&&BASE_TYPES[v]){id=v;name=BASE_TYPES[v].name;}
+    else if(typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v)){id=v.toLowerCase();name=v;}
+    else if(v&&typeof v==='object'&&/^#[0-9a-f]{6}$/i.test(v.color||'')){id=v.color.toLowerCase();name=String(v.name||v.color);}
+    else throw new Error(`Unbekannter Blocktyp für „${ch}“. Erlaubt sind ${Object.keys(BASE_TYPES).join(', ')}, eine Farbe wie "#c2a36b" oder {"color":"#c2a36b","name":"Sandstein"}.`);
+    map[ch]=id;names[id]=name;
+  }
+  const blocks=[];let w=0,d=0;
+  layers.forEach((layer,y)=>{
+    if(!Array.isArray(layer)) throw new Error(`Ebene ${y+1} muss eine Liste von Zeilen sein.`);
+    d=Math.max(d,layer.length);
+    layer.forEach((row,z)=>{
+      if(typeof row!=='string') throw new Error(`Ebene ${y+1}, Reihe ${z+1} muss ein Text sein.`);
+      const chars=[...row];w=Math.max(w,chars.length);
+      chars.forEach((ch,x)=>{
+        if(ch==='.'||ch===' ') return;
+        const id=map[ch];
+        if(!id) throw new Error(`Ebene ${y+1}, Reihe ${z+1}: Zeichen „${ch}“ steht nicht in der Palette.`);
+        blocks.push({x,y,z,t:id});
+      });
+    });
+  });
+  if(!blocks.length) throw new Error('Der Bauplan enthält keine Blöcke.');
+  if(blocks.length>60000) throw new Error('Mehr als 60.000 Blöcke. Teile den Bauplan bitte auf.');
+  return {name:String(obj.name||'Ohne Namen'),blocks,names,w,h:layers.length,d};
+}
+
+/* ---------- Three.js setup ---------- */
+const stage=$('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+stage.prepend(renderer.domElement);
+const canvas=renderer.domElement;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(40,1,.1,1000);
+const controls=new THREE.OrbitControls(camera,canvas);
+controls.enableDamping=true;controls.dampingFactor=.12;
+scene.add(new THREE.HemisphereLight(0xffffff,0x8899aa,.72));
+const sun=new THREE.DirectionalLight(0xffffff,.62);sun.position.set(6,12,9);scene.add(sun);
+const fill=new THREE.DirectionalLight(0xffffff,.18);fill.position.set(-8,4,-6);scene.add(fill);
+const root=new THREE.Group();scene.add(root);
+
+const ghostMat=new THREE.MeshBasicMaterial({color:0x1E2B3F,transparent:true,opacity:.1,depthWrite:false});
+const edgeMat=new THREE.LineBasicMaterial({color:0xF0C93A});
+const layerGridMat=new THREE.LineBasicMaterial({color:0x56616F,transparent:true,opacity:.55});
+const groundMat=new THREE.LineBasicMaterial({color:0x56616F,transparent:true,opacity:.22});
+
+const state={b:null,cur:0,cutX:0,cutZ:0,typeMeshes:[],ghost:null,edges:null,layerGrid:null,layerMap:[],layerCounts:[],layerTypeCounts:[],totals:{}};
+const opt={below:true,dim:true,ghost:false};
+
+function gridGeo(w,d,m){
+  const p=[],x0=-w/2-m,x1=w/2+m,z0=-d/2-m,z1=d/2+m;
+  for(let i=0;i<=w+2*m;i++){const x=x0+i;p.push(x,0,z0,x,0,z1);}
+  for(let j=0;j<=d+2*m;j++){const z=z0+j;p.push(x0,0,z,x1,0,z);}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));return g;
+}
+
+function applyTheme(){
+  const s=getComputedStyle(document.documentElement);
+  const v=n=>s.getPropertyValue(n).trim();
+  scene.background=new THREE.Color(v('--stage'));
+  ghostMat.color.set(v('--ink'));
+  edgeMat.color.set(v('--accent'));
+  layerGridMat.color.set(v('--muted'));
+  groundMat.color.set(v('--muted'));
+}
+
+function loadBuild(b){
+  stopPlay();
+  root.traverse(o=>{if(o.geometry) o.geometry.dispose();});
+  root.clear();
+  state.b=b;state.cur=b.h-1;state.cutX=b.w-1;state.cutZ=b.d-1;
+
+  const byType={};state.totals={};
+  state.layerMap=[...Array(b.h)].map(()=>new Array(b.w*b.d).fill(null));
+  state.layerCounts=new Array(b.h).fill(0);
+  state.layerTypeCounts=[...Array(b.h)].map(()=>({}));
+  for(const bl of b.blocks){
+    (byType[bl.t]=byType[bl.t]||[]).push(bl);
+    state.totals[bl.t]=(state.totals[bl.t]||0)+1;
+    state.layerMap[bl.y][bl.z*b.w+bl.x]=bl.t;
+    state.layerCounts[bl.y]++;
+    const lt=state.layerTypeCounts[bl.y];lt[bl.t]=(lt[bl.t]||0)+1;
+  }
+
+  const box=new THREE.BoxGeometry(1,1,1);
+  const white=new THREE.Color(1,1,1);
+  state.typeMeshes=Object.entries(byType).map(([id,list])=>{
+    const m=new THREE.InstancedMesh(box,getType(id).mats,list.length);
+    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    for(let i=0;i<list.length;i++) m.setColorAt(i,white);
+    m.frustumCulled=false;
+    m.userData={id,list,slots:[]};
+    root.add(m);return m;
+  });
+  state.ghost=new THREE.InstancedMesh(box,ghostMat,b.blocks.length);
+  state.ghost.frustumCulled=false;state.ghost.renderOrder=2;root.add(state.ghost);
+
+  const maxLayer=Math.max(...state.layerCounts);
+  const eg=new THREE.BufferGeometry();
+  eg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(maxLayer*24*3),3));
+  state.edges=new THREE.LineSegments(eg,edgeMat);state.edges.frustumCulled=false;root.add(state.edges);
+
+  state.layerGrid=new THREE.LineSegments(gridGeo(b.w,b.d,0),layerGridMat);root.add(state.layerGrid);
+  const ground=new THREE.LineSegments(gridGeo(b.w,b.d,3),groundMat);ground.position.y=-.003;root.add(ground);
+
+  $('buildName').textContent=`${b.name}: ${b.blocks.length} Blöcke, ${b.w} × ${b.d} Felder, ${b.h} Ebenen`;
+  $('indTotal').textContent=b.h;
+  $('layer').max=b.h;
+  $('cutX').max=b.w;$('cutX').value=b.w;
+  $('cutZ').max=b.d;$('cutZ').value=b.d;
+  renderTower();resetView();update();
+}
+
+const M=new THREE.Matrix4(),C=new THREE.Color();
+const EDGES=[[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1],[1,1,1,0,1,1],[1,1,1,1,0,1],[1,1,1,1,1,0],[1,0,0,1,1,0],[1,0,0,1,0,1],[0,1,0,1,1,0],[0,1,0,0,1,1],[0,0,1,1,0,1],[0,0,1,0,1,1]];
+
+function updateScene(){
+  const {b,cur,cutX,cutZ}=state;
+  const px=x=>x-b.w/2+.5,pz=z=>z-b.d/2+.5;
+  for(const tm of state.typeMeshes){
+    let n=0;const slots=tm.userData.slots;slots.length=0;
+    for(const bl of tm.userData.list){
+      if(bl.x>cutX||bl.z>cutZ) continue;
+      let s;
+      if(bl.y===cur) s=1;
+      else if(bl.y<cur&&opt.below) s=opt.dim?.56:1;
+      else continue;
+      M.makeTranslation(px(bl.x),bl.y+.5,pz(bl.z));tm.setMatrixAt(n,M);
+      C.setRGB(s,s,s);tm.setColorAt(n,C);slots[n]=bl;n++;
+    }
+    tm.count=n;tm.instanceMatrix.needsUpdate=true;if(tm.instanceColor) tm.instanceColor.needsUpdate=true;
+  }
+  let g=0;
+  if(opt.ghost){
+    for(const bl of b.blocks){
+      if(bl.y<=cur||bl.x>cutX||bl.z>cutZ) continue;
+      M.makeTranslation(px(bl.x),bl.y+.5,pz(bl.z));state.ghost.setMatrixAt(g++,M);
+    }
+  }
+  state.ghost.count=g;state.ghost.instanceMatrix.needsUpdate=true;
+
+  const pos=state.edges.geometry.attributes.position.array;let k=0;const e=.012,s=1+2*e;
+  for(const bl of b.blocks){
+    if(bl.y!==cur||bl.x>cutX||bl.z>cutZ) continue;
+    const x0=bl.x-b.w/2-e,y0=bl.y-e,z0=bl.z-b.d/2-e;
+    for(const E of EDGES){
+      pos[k++]=x0+E[0]*s;pos[k++]=y0+E[1]*s;pos[k++]=z0+E[2]*s;
+      pos[k++]=x0+E[3]*s;pos[k++]=y0+E[4]*s;pos[k++]=z0+E[5]*s;
+    }
+  }
+  state.edges.geometry.setDrawRange(0,k/3);
+  state.edges.geometry.attributes.position.needsUpdate=true;
+  state.layerGrid.position.y=cur+.01;
+}
+
+/* ---------- UI ---------- */
+function renderTower(){
+  const t=$('tower');t.innerHTML='';
+  const max=Math.max(...state.layerCounts);
+  state.layerCounts.forEach((n,y)=>{
+    const bt=document.createElement('button');bt.type='button';bt.dataset.y=y;
+    bt.setAttribute('aria-label',`Ebene ${y+1}, ${n} Blöcke`);
+    bt.innerHTML=`<span>${y+1}</span><span class="bar"><i style="width:${max?Math.round(n/max*100):0}%"></i></span>`;
+    bt.addEventListener('click',()=>setLayer(y));
+    t.appendChild(bt);
+  });
+}
+
+function renderMaterials(){
+  const lt=state.layerTypeCounts[state.cur];
+  const ids=Object.keys(state.totals).sort((a,b)=>(lt[b]||0)-(lt[a]||0)||state.totals[b]-state.totals[a]);
+  $('mats').innerHTML=ids.map(id=>{
+    const n=lt[id]||0;
+    return `<tr class="${n?'':'zero'}"><td><span class="nm"><img alt="" src="${getType(id).swatch}">${esc(state.b.names[id])}</span></td><td class="here">${n}</td><td>${state.totals[id]}</td></tr>`;
+  }).join('');
+}
+
+function drawMap(){
+  const {b,cur}=state;if(!b) return;
+  const cv=$('map'),wrap=cv.parentElement;
+  const avail=Math.max(120,wrap.clientWidth-18);
+  const lab=20;
+  let cell=Math.floor((avail-lab)/b.w);cell=Math.max(6,Math.min(28,cell));
+  const W=lab+cell*b.w,H=lab+cell*b.d,dpr=window.devicePixelRatio||1;
+  cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);cv.style.width=W+'px';cv.style.height=H+'px';
+  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,W,H);
+  const s=getComputedStyle(document.documentElement),v=n=>s.getPropertyValue(n).trim();
+  const here=state.layerMap[cur],below=cur>0?state.layerMap[cur-1]:null;
+  for(let z=0;z<b.d;z++)for(let x=0;x<b.w;x++){
+    const X=lab+x*cell,Y=lab+z*cell,i=z*b.w+x;
+    if(here[i]){ctx.globalAlpha=1;ctx.drawImage(getType(here[i]).top,X,Y,cell,cell);}
+    else if(below&&below[i]){ctx.globalAlpha=.22;ctx.drawImage(getType(below[i]).top,X,Y,cell,cell);}
+    if(x>state.cutX||z>state.cutZ){ctx.globalAlpha=.65;ctx.fillStyle=v('--panel');ctx.fillRect(X,Y,cell,cell);}
+  }
+  ctx.globalAlpha=1;ctx.strokeStyle=v('--line');ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<=b.w;x++){const X=lab+x*cell+.5;ctx.moveTo(X,lab);ctx.lineTo(X,H);}
+  for(let z=0;z<=b.d;z++){const Y=lab+z*cell+.5;ctx.moveTo(lab,Y);ctx.lineTo(W,Y);}
+  ctx.stroke();
+  ctx.fillStyle=v('--muted');ctx.font='10px "Atkinson Hyperlegible", system-ui, sans-serif';
+  const step=cell>=14?1:cell>=9?2:5;
+  ctx.textAlign='center';ctx.textBaseline='alphabetic';
+  for(let x=0;x<b.w;x++) if(x===0||(x+1)%step===0) ctx.fillText(x+1,lab+x*cell+cell/2,lab-6);
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let z=0;z<b.d;z++) if(z===0||(z+1)%step===0) ctx.fillText(z+1,lab-5,lab+z*cell+cell/2);
+}
+
+function updateUI(){
+  const {b,cur}=state;
+  $('indNum').textContent=cur+1;
+  $('indCount').textContent=`${state.layerCounts[cur]} Blöcke`;
+  $('layer').value=cur+1;
+  $('down').disabled=cur<=0;$('up').disabled=cur>=b.h-1;
+  $('cutXOut').textContent=`1–${state.cutX+1} von ${b.w}`;
+  $('cutZOut').textContent=`1–${state.cutZ+1} von ${b.d}`;
+  for(const bt of $('tower').children){
+    const y=+bt.dataset.y;
+    if(y===cur){bt.setAttribute('aria-current','step');bt.scrollIntoView({block:'nearest'});}
+    else bt.removeAttribute('aria-current');
+    bt.classList.toggle('above',y>cur);
+  }
+  renderMaterials();drawMap();
+}
+function update(){updateScene();updateUI();}
+
+function setLayer(y,fromPlay){
+  if(!fromPlay) stopPlay();
+  y=Math.max(0,Math.min(state.b.h-1,y));
+  if(y===state.cur&&!fromPlay) return;
+  state.cur=y;update();
+}
+
+function resetView(){
+  const {w,h,d}=state.b;const s=Math.max(w,d,h);const dist=s*1.9+4;
+  camera.position.set(dist*.62,h*.5+dist*.55,dist*.95);
+  controls.target.set(0,h*.4,0);camera.far=dist*20;camera.updateProjectionMatrix();controls.update();
+}
+
+let playTimer=null;
+function togglePlay(){
+  if(playTimer){stopPlay();return;}
+  if(state.cur>=state.b.h-1) setLayer(0,true);
+  playTimer=setInterval(()=>{
+    if(state.cur>=state.b.h-1){stopPlay();return;}
+    setLayer(state.cur+1,true);
+  },850);
+  $('play').textContent='Pause';$('play').setAttribute('aria-pressed','true');
+}
+function stopPlay(){
+  if(playTimer){clearInterval(playTimer);playTimer=null;}
+  $('play').textContent='Ebenen abspielen';$('play').setAttribute('aria-pressed','false');
+}
+
+$('layer').addEventListener('input',e=>setLayer(+e.target.value-1));
+$('up').addEventListener('click',()=>setLayer(state.cur+1));
+$('down').addEventListener('click',()=>setLayer(state.cur-1));
+$('cutX').addEventListener('input',e=>{state.cutX=+e.target.value-1;update();});
+$('cutZ').addEventListener('input',e=>{state.cutZ=+e.target.value-1;update();});
+$('optBelow').addEventListener('change',e=>{opt.below=e.target.checked;$('optDim').disabled=!opt.below;update();});
+$('optDim').addEventListener('change',e=>{opt.dim=e.target.checked;update();});
+$('optGhost').addEventListener('change',e=>{opt.ghost=e.target.checked;update();});
+$('reset').addEventListener('click',resetView);
+$('play').addEventListener('click',togglePlay);
+
+window.addEventListener('keydown',e=>{
+  const tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='textarea'||(tag==='input'&&e.target.type!=='checkbox')) return;
+  if(e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();setLayer(state.cur+1);}
+  else if(e.key==='ArrowDown'||e.key==='PageDown'){e.preventDefault();setLayer(state.cur-1);}
+});
+
+/* ---------- Loading builds ---------- */
+function setStatus(msg,err){const s=$('status');s.textContent=msg;s.classList.toggle('error',!!err);}
+function loadFromText(text){
+  let obj;
+  try{obj=JSON.parse(text);}catch(err){setStatus('Das JSON ist ungültig: '+err.message,true);return;}
+  try{const b=parseBuild(obj);loadBuild(b);setStatus(`„${b.name}“ geladen: ${b.blocks.length} Blöcke in ${b.h} Ebenen.`);}
+  catch(err){setStatus(err.message,true);}
+}
+$('load').addEventListener('click',()=>loadFromText($('json').value));
+$('sample').addEventListener('click',()=>{$('json').value=toJSONText(sampleHouse());loadFromText($('json').value);});
+$('file').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0];if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{$('json').value=String(r.result);loadFromText(r.result);};
+  r.onerror=()=>setStatus('Die Datei konnte nicht gelesen werden.',true);
+  r.readAsText(f);e.target.value='';
+});
+
+/* ---------- Hover tooltip ---------- */
+const tip=$('tip'),ray=new THREE.Raycaster(),ndc=new THREE.Vector2();let hoverEvt=null;
+canvas.addEventListener('pointermove',e=>{if(e.buttons){tip.hidden=true;hoverEvt=null;return;}hoverEvt=e;});
+canvas.addEventListener('pointerleave',()=>{tip.hidden=true;hoverEvt=null;});
+function doHover(e){
+  const r=canvas.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  const hits=ray.intersectObjects(state.typeMeshes,false);
+  const h=hits[0];const bl=h&&h.object.userData.slots[h.instanceId];
+  if(!bl){tip.hidden=true;return;}
+  tip.innerHTML=`${esc(state.b.names[bl.t])}<span>Ebene ${bl.y+1}, Spalte ${bl.x+1}, Reihe ${bl.z+1}</span>`;
+  tip.hidden=false;
+  const sr=stage.getBoundingClientRect();
+  let left=e.clientX-sr.left+14,top=e.clientY-sr.top+14;
+  if(left+tip.offsetWidth>sr.width-8) left=e.clientX-sr.left-tip.offsetWidth-10;
+  if(top+tip.offsetHeight>sr.height-8) top=e.clientY-sr.top-tip.offsetHeight-10;
+  tip.style.left=left+'px';tip.style.top=top+'px';
+}
+
+/* ---------- Sizing, theme, loop ---------- */
+function resize(){
+  const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h) return;
+  renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+let mapTimer;window.addEventListener('resize',()=>{clearTimeout(mapTimer);mapTimer=setTimeout(drawMap,80);});
+const mq=window.matchMedia('(prefers-color-scheme: dark)');
+const onTheme=()=>{applyTheme();drawMap();};
+mq.addEventListener?mq.addEventListener('change',onTheme):mq.addListener(onTheme);
+
+function loop(){
+  requestAnimationFrame(loop);
+  controls.update();
+  if(hoverEvt){doHover(hoverEvt);hoverEvt=null;}
+  renderer.render(scene,camera);
+}
+
+applyTheme();
+$('json').value=toJSONText(sampleHouse());
+loadBuild(parseBuild(sampleHouse()));
+resize();
+document.fonts&&document.fonts.ready.then(drawMap);
+loop();
+})();
+</script>
+</body>
+</html>
